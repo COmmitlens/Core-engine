@@ -141,7 +141,7 @@ func (g *GitHubRepositoryService) ExplainCommitFileChange(param models.ExplainCo
 }
 
 func (g *GitHubRepositoryService) callAIService(systemPrompt, userPrompt string) (string, error) {
-	const aiServiceURL = "http://localhost:9000/explain-commit-file-change"
+	const aiServiceURL = g.Config.AiBackendUrl + "/explain-commit-file-change"
 
 	// Prepare request payload
 	requestBody := map[string]string{
