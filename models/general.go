@@ -19,3 +19,13 @@ type MetaPagination struct {
 type BasicRespMesg struct {
 	Message string `json:"message"`
 }
+
+type IntLocale struct {
+	Id int64 `json:"id"`
+	En int64 `json:"en"`
+}
+
+type StringLocale struct {
+	Id string `json:"id"`
+	En string `json:"en"`
+}

@@ -60,4 +60,12 @@ func v1Routes(g *echo.Group, h AppModel) {
 	githubRepo.POST("/commit-files/:commit_file_id/explain", h.GitHubRepository.ExplainCommitFileChange)
 	githubRepo.POST("/backfill-embeddings", h.GitHubRepository.BackfillEmbeddings)
 
+	credit := g.Group("/credit", middleware.JWTVerify())
+	credit.GET("/options", h.CreditOption.GetCreditOptions)
+	credit.POST("/subscription", h.Subscription.Subscribe)
+	credit.POST("/verify_sub", h.Subscription.VerifySub)
+	credit.POST("/cancel_sub", h.Subscription.CancelSub)
+	credit.GET("/subscription-status", h.Subscription.SubscriptionStatus)
+
+	g.POST("/stripe/webhook", h.Subscription.StripeWebhook)
 }

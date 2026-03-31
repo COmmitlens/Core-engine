@@ -31,8 +31,28 @@ func DbInit() {
 
 	fmt.Println("Connected to Database")
 
-	// Uncomment if you have models to migrate
-	err = db.AutoMigrate()
+	err = db.AutoMigrate(
+	// Core user/auth tables
+	// &models.User{},
+	// &models.Role{},
+	// // Workspace/channel tables
+	// &models.Workspace{},
+	// &models.Channels{},
+	// &models.ManageWorkspace{},
+	// &models.ManageChannels{},
+	// &models.Credentials{},
+	// // GitHub integration tables
+	// &models.GitHubInstallation{},
+	// &models.GitHubRepository{},
+	// &models.GitHubCommits{},
+	// &models.GitHubCommitFiles{},
+	// &models.CommitFileEmbedding{},
+	// // Billing/payment tables
+	// &models.CreditOption{},
+	// &models.Subscription{},
+	// &models.UserCredit{},
+	// &models.UserCreditHistory{},
+	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}

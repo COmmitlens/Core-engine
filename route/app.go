@@ -23,6 +23,8 @@ type AppModel struct {
 	Credentials      handler.CredentialsHandler
 	ConnectOrg       handler.ConnectOrgHandler
 	GitHubRepository handler.GitHubRepositoryHandler
+	CreditOption     handler.CreditOptionHandler
+	Subscription     handler.SubscriptionHandler
 }
 
 func App() AppModel {
@@ -53,13 +55,17 @@ func App() AppModel {
 	commitFileEmbeddingDomain := &domain.CommitFileEmbeddingDomainCtx{}
 	gitHubInstallationsDomain := &domain.GitHubInstallationsDomainCtx{}
 	aiDomain := &domain.AiDomainCtx{}
+	creditOptionDomain := &domain.CreditOptionDomainCtx{}
+	subscriptionDomain := &domain.SubscriptionDomainCtx{}
+	userCreditDomain := &domain.UserCreditDomainCtx{}
 
 	//service
 	healthService := service.HealthService{
 		HealthDomain: healthDomain,
 	}
 	userService := service.UserService{
-		UserDomain: userDomain,
+		UserDomain:       userDomain,
+		UserCreditDomain: userCreditDomain,
 	}
 	authService := service.AuthService{
 		AuthDomain: authDomain,
@@ -103,6 +109,15 @@ func App() AppModel {
 		GitHubCommitFilesDomain:   gitHubCommitFilesDomain,
 		CommitFileEmbeddingDomain: commitFileEmbeddingDomain,
 		QueueClient:               queueClient,
+	}
+	creditOptionService := service.CreditOptionService{
+		CreditOptionDomain: creditOptionDomain,
+	}
+	subscriptionService := service.SubscriptionService{
+		SubscriptionDomain: subscriptionDomain,
+		CreditOptionDomain: creditOptionDomain,
+		UserDomain:         userDomain,
+		UserCreditDomain:   userCreditDomain,
 	}
 
 	// Start the asynq worker server (processes enqueued tasks in background)
@@ -152,6 +167,12 @@ func App() AppModel {
 	connectOrgHandler := handler.ConnectOrgHandler{
 		ConnectOrgService: connectOrgService,
 	}
+	creditOptionHandler := handler.CreditOptionHandler{
+		CreditOptionService: creditOptionService,
+	}
+	subscriptionHandler := handler.SubscriptionHandler{
+		SubscriptionService: subscriptionService,
+	}
 	gitHubRepositoryHandler := handler.GitHubRepositoryHandler{
 		GitHubRepositoryService: gitHubRepositoryService,
 	}
@@ -168,5 +189,7 @@ func App() AppModel {
 		Credentials:      credentialsHandler,
 		ConnectOrg:       connectOrgHandler,
 		GitHubRepository: gitHubRepositoryHandler,
+		CreditOption:     creditOptionHandler,
+		Subscription:     subscriptionHandler,
 	}
 }
