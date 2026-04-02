@@ -75,6 +75,7 @@ type GetAllWorkspaceByUserIdResp struct {
 
 type GetWorkspaceDetailsReqs struct {
 	Workspace_id int64 `json:"workspace_id"`
+	UserID       int64 `json:"-"`
 }
 
 type GetWorkspaceDetailsResp struct {

@@ -8,6 +8,8 @@ import (
 type GitHubInstallationsDomain interface {
 	GetAllByWorkspaceId(workspaceID int64) ([]models.GitHubRepository, error)
 	GetOrgDetailsByWorkspaceId(workspaceID int64) (models.OrgDetailsResponse, error)
+	GetWorkspaceIdByRepoId(repoID int64) (int64, error)
+	GetWorkspaceIdByCommitId(commitID int64) (int64, error)
 }
 
 type GitHubInstallationsDomainCtx struct{}
@@ -74,4 +76,35 @@ func (g *GitHubInstallationsDomainCtx) GetOrgDetailsByWorkspaceId(workspaceID in
 	}
 
 	return orgDetails, nil
+}
+
+func (g *GitHubInstallationsDomainCtx) GetWorkspaceIdByRepoId(repoID int64) (int64, error) {
+	db := config.DbManager()
+	var workspaceID int64
+	err := db.Table("github_installations").
+		Select("github_installations.workspace_id").
+		Joins("INNER JOIN git_hub_repository ON git_hub_repository.installation_id = github_installations.installation_id").
+		Where("git_hub_repository.id = ?", repoID).
+		Limit(1).
+		Scan(&workspaceID).Error
+	if err != nil {
+		return 0, err
+	}
+	return workspaceID, nil
+}
+
+func (g *GitHubInstallationsDomainCtx) GetWorkspaceIdByCommitId(commitID int64) (int64, error) {
+	db := config.DbManager()
+	var workspaceID int64
+	err := db.Table("github_installations").
+		Select("github_installations.workspace_id").
+		Joins("INNER JOIN git_hub_repository ON git_hub_repository.installation_id = github_installations.installation_id").
+		Joins("INNER JOIN git_hub_commits ON git_hub_commits.github_repository_id = git_hub_repository.id").
+		Where("git_hub_commits.id = ?", commitID).
+		Limit(1).
+		Scan(&workspaceID).Error
+	if err != nil {
+		return 0, err
+	}
+	return workspaceID, nil
 }

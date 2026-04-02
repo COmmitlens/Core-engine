@@ -39,7 +39,7 @@ func v1Routes(g *echo.Group, h AppModel) {
 	workspace.POST("/:workspace_id/query", h.GitHubRepository.QueryWorkspace)
 
 	g.POST("/workspace/accept-invite", h.Workspace.AcceptInvite)
-	g.POST("/workspace/details", h.Workspace.GetWorkspaceDetails)
+	g.POST("/workspace/details", h.Workspace.GetWorkspaceDetails, middleware.JWTVerify())
 
 	channel := g.Group("/channel", middleware.JWTVerify())
 	channel.POST("/create", h.Channel.CreateChannel)
