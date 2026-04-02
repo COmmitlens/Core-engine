@@ -89,15 +89,15 @@ func (githubRepositoryHandler *GitHubRepositoryHandler) QueryWorkspace(c echo.Co
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid workspace_id"})
 	}
 
-	var req models.WorkspaceQueryRequest
-	if err := c.Bind(&req); err != nil {
+	var param models.WorkspaceQueryRequest
+	if err := c.Bind(&param); err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
-	if req.Query == "" {
+	if param.Query == "" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": "query is required"})
 	}
 
-	response, err := githubRepositoryHandler.GitHubRepositoryService.QueryWorkspace(req.Query, workspaceIDInt)
+	response, err := githubRepositoryHandler.GitHubRepositoryService.QueryWorkspace(param, workspaceIDInt)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
 	}

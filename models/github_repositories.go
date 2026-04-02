@@ -83,7 +83,12 @@ type GetRepoCommitsReqs struct {
 }
 
 type WorkspaceQueryRequest struct {
-	Query string `json:"query"`
+	Query     string `json:"query"`
+	Author    string `json:"author"`
+	DateRange struct {
+		StartDate time.Time `json:"start_date"`
+		EndDate   time.Time `json:"end_date"`
+	} `json:"date_range"`
 }
 
 type WorkspaceQuerySource struct {
@@ -93,8 +98,11 @@ type WorkspaceQuerySource struct {
 }
 
 type WorkspaceQueryResponse struct {
-	Answer  string                 `json:"answer"`
-	Sources []WorkspaceQuerySource `json:"sources"`
+	Answer      string                 `json:"answer"`
+	ActionItems []string               `json:"action_items"`
+	CodePatch   string                 `json:"code_patch"`
+	Impact      string                 `json:"impact"`
+	Sources     []WorkspaceQuerySource `json:"sources"`
 }
 
 type WorkspaceSearchResult struct {

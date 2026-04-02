@@ -135,10 +135,8 @@ func verifyGitHubSignature(body []byte, sigHeader, secret string) bool {
 }
 
 func (h *ConnectOrgHandler) HandleWebhook(c echo.Context) error {
-	log.Println("🔥 WEBHOOK HIT")
 
 	event := c.Request().Header.Get("X-GitHub-Event")
-	log.Println("EVENT =", event)
 
 	// ✅ Read body ONCE
 	bodyBytes, err := io.ReadAll(c.Request().Body)
@@ -176,7 +174,6 @@ func (h *ConnectOrgHandler) HandleWebhook(c echo.Context) error {
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return c.JSON(500, map[string]string{"error": err.Error()})
 		}
-		log.Println("real ", existing)
 		if existing == nil {
 			log.Println("existing")
 			params := models.GitHubInstallation{

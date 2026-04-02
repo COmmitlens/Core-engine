@@ -218,6 +218,42 @@ func (c *AuthService) GoogleLogin(email, name string) (models.LogInResponse, err
 	}, nil
 }
 
+func (c *AuthService) GithubLogin(email, name, username string) (models.LogInResponse, error) {
+	user, err := c.UserDomain.Get(models.GetUserParam{Email: email})
+	if err != nil {
+		if err.Error() != "user not found" {
+			return models.LogInResponse{}, err
+		}
+		user, err = c.UserDomain.Insert(models.User{
+			Email:    email,
+			Name:     name,
+			Username: username,
+			Role:     "customer",
+			Language: utils.UserLanguageEn,
+			IsActive: true,
+		})
+		if err != nil {
+			return models.LogInResponse{}, err
+		}
+	}
+
+	now := time.Now()
+	payload := ParseJWTParamFromUser(user, now)
+	token, err := GenerateJWT(payload)
+	if err != nil {
+		return models.LogInResponse{}, err
+	}
+
+	return models.LogInResponse{
+		ID:       user.ID,
+		Email:    user.Email,
+		Name:     user.Name,
+		Role:     user.Role,
+		Token:    token,
+		Redirect: "/dashboard",
+	}, nil
+}
+
 func (c *AuthService) validateLogIn(param models.LogInRequest, user models.User) error {
 	if user.ID == 0 {
 		return utils.ErrUserNotExist

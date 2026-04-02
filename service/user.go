@@ -46,10 +46,10 @@ func FindRole(paraid int16) string {
 func (c *UserService) Update(param models.UpdateUserParam) error {
 	useParam := models.User{
 		ID:       param.UserID,
-		Email:    param.Email,
 		Name:     param.Name,
 		Role:     param.Role,
 		Language: param.Language,
+		Username: param.Username,
 	}
 
 	err := c.UserDomain.Update(useParam)
@@ -71,8 +71,8 @@ func (c *UserService) GetUserName(userID int64) (models.UserDataResponse, error)
 		ID:       data.ID,
 		Email:    data.Email,
 		Name:     data.Name,
-		Role:     data.Role,
 		Language: data.Language,
+		Username: data.Username,
 	}
 	return resp, nil
 }

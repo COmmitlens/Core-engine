@@ -1,18 +1,15 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"core/config"
 	"core/domain"
 	"core/models"
 	"core/queue"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pgvector/pgvector-go"
 )
@@ -23,6 +20,7 @@ type GitHubRepositoryService struct {
 	GitHubCommitFilesDomain   domain.GitHubCommitFilesDomain
 	CommitFileEmbeddingDomain domain.CommitFileEmbeddingDomain
 	QueueClient               *queue.Client
+	AiDomain                  domain.AiDomain
 }
 
 // BackfillEmbeddings queues embedding tasks for every commit file that has no
@@ -127,7 +125,7 @@ func (g *GitHubRepositoryService) ExplainCommitFileChange(param models.ExplainCo
 	estimatedTokens := (len(systemPrompt) + len(userPrompt)) / 4
 	fmt.Printf("Estimated tokens: %d\n", estimatedTokens)
 
-	aiResponse, err := g.callAIService(systemPrompt, userPrompt)
+	aiResponse, err := g.AiDomain.CallAzureChatCompletion(systemPrompt, userPrompt)
 	if err != nil {
 		return models.ExplainCommitFileChangeResponse{}, fmt.Errorf("AI service error: %w", err)
 	}
@@ -141,43 +139,6 @@ func (g *GitHubRepositoryService) ExplainCommitFileChange(param models.ExplainCo
 	}
 
 	return response, nil
-}
-
-func (g *GitHubRepositoryService) callAIService(systemPrompt, userPrompt string) (string, error) {
-	aiServiceURL := config.GetConfig().AiBackendUrl + "/explain-commit-file-change"
-
-	// Prepare request payload
-	requestBody := map[string]string{
-		"systemPrompt": systemPrompt,
-		"userPrompt":   userPrompt,
-	}
-
-	jsonData, err := json.Marshal(requestBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Make HTTP POST request
-	resp, err := http.Post(aiServiceURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to call AI service: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("AI service returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Return the response as string (assuming the AI service returns plain text)
-	return string(body), nil
 }
 
 func (g *GitHubRepositoryService) buildRelatedFilesContext(relatedFiles []models.RelatedCommitFileResponse) (string, error) {
@@ -238,7 +199,118 @@ func (g *GitHubRepositoryService) buildSystemPrompt() string {
 Be concise and technical.`
 }
 
-func (g *GitHubRepositoryService) QueryWorkspace(query string, workspaceID int64) (models.WorkspaceQueryResponse, error) {
+func (g *GitHubRepositoryService) QueryWorkspace(param models.WorkspaceQueryRequest, workspaceID int64) (models.WorkspaceQueryResponse, error) {
+	intent, err := g.AiDomain.ClassifyQueryIntent(param.Query)
+	if err != nil {
+		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to classify query intent: %w", err)
+	}
+
+	switch intent {
+	case "code_explanation":
+		return g.semantic_search(param.Query, workspaceID)
+	case "get_commits_by_author_and_date":
+		fmt.Println("get_commits_by_author_and_date")
+		from, to := resolveDateRange(param.DateRange)
+		commits, _ := g.GitHubCommitsDomain.GetCommitsByAuthorAndDate(workspaceID, param.Author, from, to)
+		return g.generateCommitAnswer(param.Query, commits)
+	case "get_recent_commits":
+		from, _ := resolveDateRange(param.DateRange)
+		commits, _ := g.GitHubCommitsDomain.GetRecentCommitsByWorkspace(workspaceID, from)
+		return g.generateCommitAnswer(param.Query, commits)
+	default:
+		return models.WorkspaceQueryResponse{
+			Answer:      "Sorry, I can only answer questions related to code changes and commit history.",
+			ActionItems: []string{},
+			Sources:     []models.WorkspaceQuerySource{},
+		}, nil
+	}
+}
+
+func (g *GitHubRepositoryService) generateCommitAnswer(query string, commits []models.GitHubCommits) (models.WorkspaceQueryResponse, error) {
+	if len(commits) == 0 {
+		return models.WorkspaceQueryResponse{
+			Answer:      "No commits found matching your query.",
+			ActionItems: []string{},
+			Sources:     []models.WorkspaceQuerySource{},
+		}, nil
+	}
+
+	var sb strings.Builder
+	for i, c := range commits {
+		if i >= 20 {
+			break
+		}
+		sb.WriteString(fmt.Sprintf("Commit: %s\nAuthor: %s\nDate: %s\nMessage: %s\n\n",
+			c.CommitSHA, c.GithubAuthorName, c.CommittedAt.Format(time.RFC3339), c.CommitMessage))
+	}
+
+	systemPrompt := `You are an expert code analyst. Answer the user's question based on the provided commit history.
+Be concise and technical.
+You MUST respond with a valid JSON object (no markdown, no extra text) matching this schema:
+{
+  "answer": "<direct answer to the question>",
+  "action_items": ["<actionable step>", ...],
+  "code_patch": "",
+  "impact": "<brief impact summary>"
+}`
+	userPrompt := fmt.Sprintf("QUESTION: %s\n\nCOMMIT HISTORY:\n%s\n\nRespond ONLY with the JSON object.", query, sb.String())
+
+	raw, err := g.AiDomain.CallAzureChatCompletion(systemPrompt, userPrompt)
+	if err != nil {
+		return models.WorkspaceQueryResponse{}, fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	var llmResp struct {
+		Answer      string   `json:"answer"`
+		ActionItems []string `json:"action_items"`
+		CodePatch   string   `json:"code_patch"`
+		Impact      string   `json:"impact"`
+	}
+	if err := json.Unmarshal([]byte(raw), &llmResp); err != nil {
+		llmResp.Answer = raw
+	}
+
+	repoCache := make(map[int64]string)
+	var sources []models.WorkspaceQuerySource
+	seen := make(map[string]bool)
+	for _, c := range commits {
+		if len(sources) >= 3 {
+			break
+		}
+		if seen[c.CommitSHA] {
+			continue
+		}
+		seen[c.CommitSHA] = true
+		repoName := repoCache[c.GithubRepositoryID]
+		if repoName == "" {
+			if repo, err := g.GitHubRepositoryDomain.GetByID(c.GithubRepositoryID); err == nil {
+				repoName = repo.Name
+				repoCache[c.GithubRepositoryID] = repoName
+			}
+		}
+		sources = append(sources, models.WorkspaceQuerySource{
+			CommitSHA: c.CommitSHA,
+			RepoName:  repoName,
+		})
+	}
+
+	return models.WorkspaceQueryResponse{
+		Answer:      llmResp.Answer,
+		ActionItems: llmResp.ActionItems,
+		CodePatch:   llmResp.CodePatch,
+		Impact:      llmResp.Impact,
+		Sources:     sources,
+	}, nil
+}
+
+func resolveDateRange(dateRange struct {
+	StartDate time.Time `json:"start_date"`
+	EndDate   time.Time `json:"end_date"`
+}) (time.Time, time.Time) {
+	return dateRange.StartDate, dateRange.EndDate
+}
+
+func (g *GitHubRepositoryService) semantic_search(query string, workspaceID int64) (models.WorkspaceQueryResponse, error) {
 	ctx := context.Background()
 
 	// 1. Generate query embedding
@@ -257,8 +329,9 @@ func (g *GitHubRepositoryService) QueryWorkspace(query string, workspaceID int64
 
 	if len(results) == 0 {
 		return models.WorkspaceQueryResponse{
-			Answer:  "No relevant code history found for this query in the workspace.",
-			Sources: []models.WorkspaceQuerySource{},
+			Answer:      "No relevant code history found for this query in the workspace.",
+			ActionItems: []string{},
+			Sources:     []models.WorkspaceQuerySource{},
 		}, nil
 	}
 
@@ -267,7 +340,14 @@ func (g *GitHubRepositoryService) QueryWorkspace(query string, workspaceID int64
 
 	// 4. Build prompts
 	systemPrompt := `You are an expert code analyst. Answer the user's question based on the provided commit history context.
-Be concise and technical. Reference specific files and commits when relevant.`
+Be concise and technical. Reference specific files and commits when relevant.
+You MUST respond with a valid JSON object (no markdown, no extra text) matching this schema:
+{
+  "answer": "<direct answer to the question>",
+  "action_items": ["<actionable step>", ...],
+  "code_patch": "<relevant unified diff or empty string>",
+  "impact": "<brief impact summary>"
+}`
 
 	userPrompt := fmt.Sprintf(`Based on the following commit history from the codebase, answer this question:
 
@@ -276,18 +356,33 @@ QUESTION: %s
 COMMIT HISTORY CONTEXT:
 %s
 
-Provide a clear, direct answer referencing the relevant changes.`, query, context)
+Respond ONLY with the JSON object described in the system prompt.`, query, context)
 
 	// 5. Call LLM
-	answer, err := g.callAzureChatCompletion(systemPrompt, userPrompt)
+	raw, err := g.AiDomain.CallAzureChatCompletion(systemPrompt, userPrompt)
 	if err != nil {
 		return models.WorkspaceQueryResponse{}, fmt.Errorf("LLM call failed: %w", err)
 	}
 
-	// 6. Build sources (deduplicated by commit_file_id)
+	// 6. Parse structured LLM response
+	var llmResp struct {
+		Answer      string   `json:"answer"`
+		ActionItems []string `json:"action_items"`
+		CodePatch   string   `json:"code_patch"`
+		Impact      string   `json:"impact"`
+	}
+	if err := json.Unmarshal([]byte(raw), &llmResp); err != nil {
+		// Fallback: treat raw output as plain answer
+		llmResp.Answer = raw
+	}
+
+	// 7. Build sources (deduplicated by commit_file_id)
 	seen := make(map[int64]bool)
 	var sources []models.WorkspaceQuerySource
 	for _, r := range results {
+		if len(sources) >= 3 {
+			break
+		}
 		if seen[r.CommitFileID] {
 			continue
 		}
@@ -299,7 +394,13 @@ Provide a clear, direct answer referencing the relevant changes.`, query, contex
 		})
 	}
 
-	return models.WorkspaceQueryResponse{Answer: answer, Sources: sources}, nil
+	return models.WorkspaceQueryResponse{
+		Answer:      llmResp.Answer,
+		ActionItems: llmResp.ActionItems,
+		CodePatch:   llmResp.CodePatch,
+		Impact:      llmResp.Impact,
+		Sources:     sources,
+	}, nil
 }
 
 func (g *GitHubRepositoryService) buildWorkspaceContext(results []models.WorkspaceSearchResult) string {
@@ -324,37 +425,6 @@ Patch:
 		sb.WriteString(entry)
 	}
 	return sb.String()
-}
-
-func (g *GitHubRepositoryService) callAzureChatCompletion(systemPrompt, userPrompt string) (string, error) {
-	aiServiceURL := config.GetConfig().AiBackendUrl + "/explain-commit-file-change"
-
-	requestBody := map[string]string{
-		"systemPrompt": systemPrompt,
-		"userPrompt":   userPrompt,
-	}
-	jsonData, err := json.Marshal(requestBody)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	resp, err := http.Post(aiServiceURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return "", fmt.Errorf("failed to call AI service: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("AI service returned status %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read AI service response: %w", err)
-	}
-
-	return string(body), nil
 }
 
 func (g *GitHubRepositoryService) buildUserPrompt(mainCommitFile models.GitHubCommitFiles, relatedFilesContext string, relatedCount int, question string) string {

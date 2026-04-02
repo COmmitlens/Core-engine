@@ -32,6 +32,12 @@ type Configuration struct {
 	GoogleClientID         string `env:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret     string `env:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL      string `env:"GOOGLE_REDIRECT_URL"`
+	// GoogleClientID          string `env:"GOOGLE_CLIENT_ID"`
+	// GoogleClientSecret      string `env:"GOOGLE_CLIENT_SECRET"`
+	// GoogleRedirectURL       string `env:"GOOGLE_REDIRECT_URL"`
+	GithubAuthClientID     string `env:"GITHUB_AUTH_CLIENT_ID"`
+	GithubAuthClientSecret string `env:"GITHUB_AUTH_CLIENT_SECRET"`
+	GithubAuthRedirectURL  string `env:"GITHUB_AUTH_REDIRECT_URL"`
 }
 
 func GetConfig() Configuration {

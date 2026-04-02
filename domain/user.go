@@ -120,6 +120,9 @@ func (c *UserDomainCtx) Update(param models.User) error {
 	if param.IsActive {
 		update["is_active"] = param.IsActive
 	}
+	if param.Username != "" {
+		update["username"] = param.Username
+	}
 
 	return db.Where("id = ?", userID).Updates(update).Error
 }

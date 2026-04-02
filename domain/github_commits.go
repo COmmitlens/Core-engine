@@ -3,6 +3,8 @@ package domain
 import (
 	"core/config"
 	"core/models"
+	"fmt"
+	"time"
 )
 
 type GitHubCommitsDomain interface {
@@ -10,6 +12,8 @@ type GitHubCommitsDomain interface {
 	GetCommitDetails(repoID int64, commitSHA string) (models.CommitDetailsResponse, error)
 	GetRepoCommitsByRepoId(param models.GetRepoCommitsReqs) (models.GetRepoCommitsPaginatedResponse, error)
 	StoreCommitsBulk(params []models.GitHubCommits) ([]models.GitHubCommits, error)
+	GetCommitsByAuthorAndDate(workspaceID int64, author string, from, to time.Time) ([]models.GitHubCommits, error)
+	GetRecentCommitsByWorkspace(workspaceID int64, from time.Time) ([]models.GitHubCommits, error)
 }
 
 type GitHubCommitsDomainCtx struct{}
@@ -120,4 +124,34 @@ func (g *GitHubCommitsDomainCtx) StoreCommitsBulk(params []models.GitHubCommits)
 
 	return params, nil
 
+}
+
+func (g *GitHubCommitsDomainCtx) GetCommitsByAuthorAndDate(workspaceID int64, author string, from, to time.Time) ([]models.GitHubCommits, error) {
+	db := config.DbManager()
+	fmt.Println("author ", author, " from ", from, " to ", to)
+
+	var commits []models.GitHubCommits
+	err := db.Table("git_hub_commits c").
+		Joins("JOIN git_hub_repository gr ON gr.id = c.github_repository_id").
+		Joins("JOIN github_installations gi ON gi.installation_id = gr.installation_id").
+		Where("gi.workspace_id = ? AND c.author_email = ? AND c.committed_at BETWEEN ? AND ?", workspaceID, author, from, to).
+		Order("c.committed_at DESC").
+		Find(&commits).Error
+
+	return commits, err
+}
+
+func (g *GitHubCommitsDomainCtx) GetRecentCommitsByWorkspace(workspaceID int64, from time.Time) ([]models.GitHubCommits, error) {
+	db := config.DbManager()
+
+	var commits []models.GitHubCommits
+	err := db.Table("git_hub_commits c").
+		Joins("JOIN git_hub_repository gr ON gr.id = c.github_repository_id").
+		Joins("JOIN github_installations gi ON gi.installation_id = gr.installation_id").
+		Where("gi.workspace_id = ? AND c.committed_at >= ?", workspaceID, from).
+		Order("c.committed_at DESC").
+		Limit(50).
+		Find(&commits).Error
+
+	return commits, err
 }

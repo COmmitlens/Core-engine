@@ -11,6 +11,7 @@ type GitHubRepositoryDomain interface {
 	GetRepositoryActivity(repoID, days int64) ([]models.CommitActivity, error)
 	FindRepositoryByInstallationID(params models.GitHubRepository) (models.GitHubRepository, error)
 	FindUserIdByInstallationID(params models.GitHubRepository) (int64, error)
+	GetByID(id int64) (models.GitHubRepository, error)
 }
 
 type GitHubRepositoryDomainCtx struct{}
@@ -87,6 +88,16 @@ func (g *GitHubRepositoryDomainCtx) FindRepositoryByInstallationID(params models
 		return models.GitHubRepository{}, err
 	}
 
+	return repository, nil
+}
+
+func (g *GitHubRepositoryDomainCtx) GetByID(id int64) (models.GitHubRepository, error) {
+	db := config.DbManager()
+	var repository models.GitHubRepository
+	err := db.First(&repository, id).Error
+	if err != nil {
+		return models.GitHubRepository{}, err
+	}
 	return repository, nil
 }
 

@@ -53,3 +53,21 @@ func (userHandler *UserHandler) GetUserName(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, resp)
 }
+
+func (userHandler *UserHandler) UpdateUserProfile(c echo.Context) error {
+	userId := c.Get("id").(int64)
+	param := models.UpdateUserParam{}
+	err := c.Bind(&param)
+	if err != nil {
+		return err
+	}
+	param.UserID = userId
+	err = userHandler.UserService.Update(param)
+	if err != nil {
+		return err
+	}
+	resp := models.BasicRespMesg{
+		Message: utils.Success,
+	}
+	return c.JSON(http.StatusOK, resp)
+}

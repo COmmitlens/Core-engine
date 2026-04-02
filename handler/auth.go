@@ -15,6 +15,7 @@ import (
 
 	"github.com/labstack/echo"
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 )
 
@@ -246,6 +247,121 @@ func (authHandler *AuthHandler) GoogleOAuthCallback(c echo.Context) error {
 	}
 
 	data, err := authHandler.AuthService.GoogleLogin(googleUser.Email, googleUser.Name)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: err.Error()})
+	}
+
+	c.SetCookie(&http.Cookie{
+		Name:     "Bearer",
+		Value:    data.Token,
+		HttpOnly: true,
+		Secure:   true,
+		Path:     "/",
+		MaxAge:   86400,
+		SameSite: http.SameSiteNoneMode,
+	})
+
+	frontendURL := config.GetConfig().FrontendUrl
+	return c.Redirect(http.StatusTemporaryRedirect, frontendURL+data.Redirect)
+}
+
+func githubAuthOAuthConfig() *oauth2.Config {
+	cfg := config.GetConfig()
+	return &oauth2.Config{
+		ClientID:     cfg.GithubAuthClientID,
+		ClientSecret: cfg.GithubAuthClientSecret,
+		RedirectURL:  cfg.GithubAuthRedirectURL,
+		Scopes:       []string{"user:email", "read:user"},
+		Endpoint:     github.Endpoint,
+	}
+}
+
+// GithubAuthURL returns the GitHub OAuth consent page URL.
+func (authHandler *AuthHandler) GithubAuthURL(c echo.Context) error {
+	state := generateState()
+	c.SetCookie(&http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		HttpOnly: true,
+		Secure:   true,
+		Path:     "/",
+		MaxAge:   300,
+		SameSite: http.SameSiteLaxMode,
+	})
+	url := githubAuthOAuthConfig().AuthCodeURL(state)
+	return c.Redirect(http.StatusTemporaryRedirect, url)
+}
+
+// GithubAuthCallback handles the redirect from GitHub, upserts the user, and sets the JWT cookie.
+func (authHandler *AuthHandler) GithubAuthCallback(c echo.Context) error {
+	state := c.QueryParam("state")
+	stateCookie, err := c.Cookie("oauth_state")
+	if err != nil || stateCookie.Value != state || state == "" {
+		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: "invalid oauth state"})
+	}
+	c.SetCookie(&http.Cookie{Name: "oauth_state", Value: "", MaxAge: -1, Path: "/"})
+
+	code := c.QueryParam("code")
+	if code == "" {
+		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: "code is required"})
+	}
+
+	oauthToken, err := githubAuthOAuthConfig().Exchange(context.Background(), code)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: "failed to exchange code: " + err.Error()})
+	}
+
+	client := githubAuthOAuthConfig().Client(context.Background(), oauthToken)
+
+	// Fetch GitHub user profile
+	userResp, err := client.Get("https://api.github.com/user")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: "failed to fetch user info"})
+	}
+	defer userResp.Body.Close()
+
+	var githubUser struct {
+		Login string `json:"login"`
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(userResp.Body).Decode(&githubUser); err != nil {
+		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: "failed to parse user info"})
+	}
+
+	// GitHub may not expose email in user profile — fetch from emails endpoint
+	if githubUser.Email == "" {
+		emailResp, err := client.Get("https://api.github.com/user/emails")
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: "failed to fetch user email"})
+		}
+		defer emailResp.Body.Close()
+
+		var emails []struct {
+			Email   string `json:"email"`
+			Primary bool   `json:"primary"`
+		}
+		if err := json.NewDecoder(emailResp.Body).Decode(&emails); err != nil {
+			return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: "failed to parse user email"})
+		}
+		for _, e := range emails {
+			if e.Primary {
+				githubUser.Email = e.Email
+				break
+			}
+		}
+	}
+
+	if githubUser.Email == "" {
+		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: "no email found on GitHub account"})
+	}
+
+	// Use login (username) as display name if name is empty
+	if githubUser.Name == "" {
+		githubUser.Name = githubUser.Login
+	}
+
+	data, err := authHandler.AuthService.GithubLogin(githubUser.Email, githubUser.Name, githubUser.Login)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: err.Error()})
 	}

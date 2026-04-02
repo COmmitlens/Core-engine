@@ -52,6 +52,7 @@ func App() AppModel {
 	gitHubCommitFilesDomain := &domain.GitHubCommitFilesDomainCtx{}
 	commitFileEmbeddingDomain := &domain.CommitFileEmbeddingDomainCtx{}
 	gitHubInstallationsDomain := &domain.GitHubInstallationsDomainCtx{}
+	aiDomain := &domain.AiDomainCtx{}
 
 	//service
 	healthService := service.HealthService{
@@ -115,6 +116,7 @@ func App() AppModel {
 		GitHubCommitFilesDomain:   gitHubCommitFilesDomain,
 		CommitFileEmbeddingDomain: commitFileEmbeddingDomain,
 		QueueClient:               queueClient,
+		AiDomain:                  aiDomain,
 	}
 
 	//handler
