@@ -4,12 +4,16 @@ import (
 	"core/config"
 	"core/models"
 	"core/service"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -120,6 +124,16 @@ func DecodeJwt(tokenString string) (jwt.MapClaims, error) {
 	return nil, errors.New("invalid token")
 }
 
+func verifyGitHubSignature(body []byte, sigHeader, secret string) bool {
+	if !strings.HasPrefix(sigHeader, "sha256=") {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(expected), []byte(sigHeader))
+}
+
 func (h *ConnectOrgHandler) HandleWebhook(c echo.Context) error {
 	log.Println("🔥 WEBHOOK HIT")
 
@@ -130,6 +144,14 @@ func (h *ConnectOrgHandler) HandleWebhook(c echo.Context) error {
 	bodyBytes, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return c.JSON(400, map[string]string{"error": "cannot read body"})
+	}
+
+	// ✅ Verify GitHub webhook signature
+	sig := c.Request().Header.Get("X-Hub-Signature-256")
+	secret := config.GetConfig().GithubWebhookSecret
+	if secret != "" && !verifyGitHubSignature(bodyBytes, sig, secret) {
+		log.Println("❌ Invalid webhook signature")
+		return c.JSON(401, map[string]string{"error": "invalid signature"})
 	}
 
 	switch event {

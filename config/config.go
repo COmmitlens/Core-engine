@@ -28,6 +28,7 @@ type Configuration struct {
 	RedisAddr              string `env:"REDIS_ADDR"`
 	RedisPassword          string `env:"REDIS_PASSWORD"`
 	AiBackendUrl           string `env:"AI_BACKEND_URL"`
+	GithubWebhookSecret    string `env:"githubwebhooksecret"`
 	GoogleClientID         string `env:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret     string `env:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL      string `env:"GOOGLE_REDIRECT_URL"`

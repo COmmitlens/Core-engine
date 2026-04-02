@@ -246,7 +246,8 @@ func (workspaceHandler *WorkspaceHandler) GetCommitFilesDetails(c echo.Context) 
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: "invalid commit id format"})
 	}
-	data, err := workspaceHandler.WorkspaceService.GetCommitFilesDetails(commitID)
+	userId := c.Get("id").(int64)
+	data, err := workspaceHandler.WorkspaceService.GetCommitFilesDetails(userId, commitID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: err.Error()})
 	}
@@ -262,7 +263,7 @@ func (workspaceHandler *WorkspaceHandler) GetWorkspaceDetails(c echo.Context) er
 	if err := c.Bind(&param); err != nil {
 		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: err.Error()})
 	}
-
+	param.UserID = c.Get("id").(int64)
 	data, err := workspaceHandler.WorkspaceService.GetWorkspaceDetails(param)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: err.Error()})
@@ -279,7 +280,7 @@ func (workspaceHandler *WorkspaceHandler) GetWorkSpaceMembers(c echo.Context) er
 	if err := c.Bind(&param); err != nil {
 		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: err.Error()})
 	}
-
+	param.UserID = c.Get("id").(int64)
 	data, err := workspaceHandler.WorkspaceService.GetWorkSpaceMembers(param)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: err.Error()})

@@ -259,6 +259,13 @@ func (c *WorkspaceService) GetAllWorkspace(userId int64) ([]models.GetAllWorkspa
 }
 
 func (c *WorkspaceService) GetAllRepository(userId, workspaceID int64) ([]models.GitHubRepositoryResponse, error) {
+	_, err := c.ManageWorkspaceDomain.GetByWorkspaceIdAndUserId(models.ManageWorkspace{
+		WorkspaceID:  workspaceID,
+		JoinedUserID: userId,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("access denied")
+	}
 	repositories, err := c.GitHubInstallationsDomain.GetAllByWorkspaceId(workspaceID)
 	if err != nil {
 		return nil, err
@@ -277,6 +284,13 @@ func (c *WorkspaceService) GetAllRepository(userId, workspaceID int64) ([]models
 }
 
 func (c *WorkspaceService) GetOrgDetails(userId, workspaceID int64) (models.OrgDetailsResponse, error) {
+	_, err := c.ManageWorkspaceDomain.GetByWorkspaceIdAndUserId(models.ManageWorkspace{
+		WorkspaceID:  workspaceID,
+		JoinedUserID: userId,
+	})
+	if err != nil {
+		return models.OrgDetailsResponse{}, fmt.Errorf("access denied")
+	}
 	data, err := c.GitHubInstallationsDomain.GetOrgDetailsByWorkspaceId(workspaceID)
 	if err != nil {
 		return models.OrgDetailsResponse{}, err
@@ -285,6 +299,17 @@ func (c *WorkspaceService) GetOrgDetails(userId, workspaceID int64) (models.OrgD
 }
 
 func (c *WorkspaceService) GetRepoCommits(param models.GetRepoCommitsReqs) (models.GetRepoCommitsPaginatedResponse, error) {
+	workspaceID, err := c.GitHubInstallationsDomain.GetWorkspaceIdByRepoId(param.RepoID)
+	if err != nil || workspaceID == 0 {
+		return models.GetRepoCommitsPaginatedResponse{}, fmt.Errorf("access denied")
+	}
+	_, err = c.ManageWorkspaceDomain.GetByWorkspaceIdAndUserId(models.ManageWorkspace{
+		WorkspaceID:  workspaceID,
+		JoinedUserID: param.UserID,
+	})
+	if err != nil {
+		return models.GetRepoCommitsPaginatedResponse{}, fmt.Errorf("access denied")
+	}
 	commits, err := c.GitHubCommitsDomain.GetRepoCommitsByRepoId(param)
 	if err != nil {
 		return models.GetRepoCommitsPaginatedResponse{}, err
@@ -292,7 +317,18 @@ func (c *WorkspaceService) GetRepoCommits(param models.GetRepoCommitsReqs) (mode
 	return commits, nil
 }
 
-func (c *WorkspaceService) GetCommitFilesDetails(commitId int64) ([]models.GitHubCommitFiles, error) {
+func (c *WorkspaceService) GetCommitFilesDetails(userId, commitId int64) ([]models.GitHubCommitFiles, error) {
+	workspaceID, err := c.GitHubInstallationsDomain.GetWorkspaceIdByCommitId(commitId)
+	if err != nil || workspaceID == 0 {
+		return nil, fmt.Errorf("access denied")
+	}
+	_, err = c.ManageWorkspaceDomain.GetByWorkspaceIdAndUserId(models.ManageWorkspace{
+		WorkspaceID:  workspaceID,
+		JoinedUserID: userId,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("access denied")
+	}
 	commitParam := models.GitHubCommitFiles{
 		GithubCommitID: commitId,
 	}
@@ -304,6 +340,13 @@ func (c *WorkspaceService) GetCommitFilesDetails(commitId int64) ([]models.GitHu
 }
 
 func (c *WorkspaceService) GetWorkspaceDetails(param models.GetWorkspaceDetailsReqs) (models.GetWorkspaceDetailsResp, error) {
+	_, err := c.ManageWorkspaceDomain.GetByWorkspaceIdAndUserId(models.ManageWorkspace{
+		WorkspaceID:  param.Workspace_id,
+		JoinedUserID: param.UserID,
+	})
+	if err != nil {
+		return models.GetWorkspaceDetailsResp{}, fmt.Errorf("access denied")
+	}
 	workSpacecParam := models.Workspace{
 		ID: param.Workspace_id,
 	}
@@ -315,6 +358,13 @@ func (c *WorkspaceService) GetWorkspaceDetails(param models.GetWorkspaceDetailsR
 }
 
 func (c *WorkspaceService) GetWorkSpaceMembers(param models.GetWorkspaceDetailsReqs) ([]models.WorkspaceMembersResp, error) {
+	_, err := c.ManageWorkspaceDomain.GetByWorkspaceIdAndUserId(models.ManageWorkspace{
+		WorkspaceID:  param.Workspace_id,
+		JoinedUserID: param.UserID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("access denied")
+	}
 	workSpacecParam := models.Workspace{
 		ID: param.Workspace_id,
 	}
