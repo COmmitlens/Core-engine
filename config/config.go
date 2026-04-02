@@ -34,6 +34,8 @@ type Configuration struct {
 	GithubAuthClientID      string `env:"GITHUB_AUTH_CLIENT_ID"`
 	GithubAuthClientSecret  string `env:"GITHUB_AUTH_CLIENT_SECRET"`
 	GithubAuthRedirectURL   string `env:"GITHUB_AUTH_REDIRECT_URL"`
+	StripeSecretKey         string `env:"STRIPE_SECRET_KEY"`
+	StripeWebhookSecret     string `env:"STRIPE_WEBHOOK_SECRET"`
 }
 
 func GetConfig() Configuration {

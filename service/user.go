@@ -6,7 +6,8 @@ import (
 )
 
 type UserService struct {
-	UserDomain domain.UserDomain
+	UserDomain       domain.UserDomain
+	UserCreditDomain domain.UserCreditDomain
 }
 
 func (c *UserService) List() ([]models.ListOfUser, error) {
@@ -67,12 +68,19 @@ func (c *UserService) GetUserName(userID int64) (models.UserDataResponse, error)
 	if err != nil {
 		return models.UserDataResponse{}, err
 	}
+
+	credit, err := c.UserCreditDomain.GetTotalCredits(userID)
+	if err != nil {
+		credit = 0
+	}
+
 	resp := models.UserDataResponse{
 		ID:       data.ID,
 		Email:    data.Email,
 		Name:     data.Name,
 		Language: data.Language,
 		Username: data.Username,
+		Credit:   credit,
 	}
 	return resp, nil
 }

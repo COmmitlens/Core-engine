@@ -62,6 +62,7 @@ type UserDataResponse struct {
 	Role      string    `json:"roles"`
 	Language  string    `json:"language"`
 	Username  string    `json:"username"`
+	Credit    float64   `json:"credit"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
