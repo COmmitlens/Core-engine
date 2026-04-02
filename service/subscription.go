@@ -173,25 +173,33 @@ func (s *SubscriptionService) VerifySub(sessionID string) (models.SubscriptionRe
 }
 
 // CancelSub cancels a Stripe subscription at the end of the current billing period.
-func (s *SubscriptionService) CancelSub(userID int64, stripeSubID string) error {
+func (s *SubscriptionService) CancelSub(userID int64, subscriptionID int64) (models.SubscriptionResp, error) {
 	s.initStripe()
 
-	sub, err := s.SubscriptionDomain.GetByStripeSubID(stripeSubID)
+	sub, err := s.SubscriptionDomain.GetByID(subscriptionID)
 	if err != nil {
-		return errors.New("subscription not found")
+		return models.SubscriptionResp{}, errors.New("subscription not found")
 	}
 	if sub.UserID != userID {
-		return errors.New("unauthorized")
+		return models.SubscriptionResp{}, errors.New("unauthorized")
+	}
+	if sub.StripeSubscriptionID == "" {
+		return models.SubscriptionResp{}, errors.New("subscription has no stripe id")
 	}
 
 	cancelParams := &stripe.SubscriptionParams{
 		CancelAtPeriodEnd: stripe.Bool(true),
 	}
-	if _, err := stripesubscription.Update(stripeSubID, cancelParams); err != nil {
-		return err
+	if _, err := stripesubscription.Update(sub.StripeSubscriptionID, cancelParams); err != nil {
+		return models.SubscriptionResp{}, err
 	}
 
-	return s.SubscriptionDomain.UpdateStatus(sub.ID, models.SubscriptionStatusCanceled)
+	if err := s.SubscriptionDomain.UpdateStatus(sub.ID, models.SubscriptionStatusCanceled); err != nil {
+		return models.SubscriptionResp{}, err
+	}
+
+	sub.Status = models.SubscriptionStatusCanceled
+	return toSubscriptionResp(sub), nil
 }
 
 // GetSubscriptionStatus returns all subscriptions for the given user.

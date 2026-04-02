@@ -42,7 +42,7 @@ type VerifySubReq struct {
 }
 
 type CancelSubReq struct {
-	SubscriptionID string `json:"subscription_id"`
+	SubscriptionID int64 `json:"subscription_id"`
 }
 
 type SubscriptionResp struct {

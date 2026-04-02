@@ -61,14 +61,15 @@ func (h *SubscriptionHandler) CancelSub(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: err.Error()})
 	}
-	if req.SubscriptionID == "" {
+	if req.SubscriptionID == 0 {
 		return c.JSON(http.StatusBadRequest, models.BasicResp{Message: "subscription_id is required"})
 	}
 
-	if err := h.SubscriptionService.CancelSub(userID, req.SubscriptionID); err != nil {
+	resp, err := h.SubscriptionService.CancelSub(userID, req.SubscriptionID)
+	if err != nil {
 		return c.JSON(http.StatusInternalServerError, models.BasicResp{Message: err.Error()})
 	}
-	return c.JSON(http.StatusOK, models.BasicResp{Message: utils.Success})
+	return c.JSON(http.StatusOK, models.BasicResp{Message: utils.Success, Data: resp})
 }
 
 // SubscriptionStatus returns all subscriptions for the current user.

@@ -8,6 +8,7 @@ import (
 
 type SubscriptionDomain interface {
 	Create(sub models.Subscription) (models.Subscription, error)
+	GetByID(id int64) (models.Subscription, error)
 	GetByUserID(userID int64) ([]models.Subscription, error)
 	GetActiveByUserID(userID int64) (models.Subscription, error)
 	GetByStripeSubID(stripeSubID string) (models.Subscription, error)
@@ -22,6 +23,16 @@ type SubscriptionDomainCtx struct{}
 func (d *SubscriptionDomainCtx) Create(sub models.Subscription) (models.Subscription, error) {
 	db := config.DbManager()
 	err := db.Create(&sub).Error
+	if err != nil {
+		return models.Subscription{}, err
+	}
+	return sub, nil
+}
+
+func (d *SubscriptionDomainCtx) GetByID(id int64) (models.Subscription, error) {
+	db := config.DbManager()
+	var sub models.Subscription
+	err := db.Where("id = ?", id).First(&sub).Error
 	if err != nil {
 		return models.Subscription{}, err
 	}
