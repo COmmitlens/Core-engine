@@ -4,16 +4,21 @@ import (
 	"core/middleware"
 
 	"github.com/labstack/echo"
+	"github.com/redis/go-redis/v9"
 )
 
-func v1Routes(g *echo.Group, h AppModel) {
+func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
+	// 5 requests / 60s per IP — applied only to sensitive auth endpoints
+	authLimiter := middleware.RateLimitMiddleware(rdb, 5, 60, "auth")
+	// 30 requests / 60s per IP — applied to all other v1 routes
+	g.Use(middleware.RateLimitMiddleware(rdb, 30, 60, "api"))
 	g.GET("/health", h.Health.Check)
 
 	auth := g.Group("/auth")
-	auth.POST("/register", h.Auth.RegisterUser)
-	auth.POST("/resend-otp", h.Auth.ResendOTP)
-	auth.POST("/verify-otp", h.Auth.VerifyOTP)
-	auth.POST("/login", h.Auth.LoginUser)
+	auth.POST("/register", h.Auth.RegisterUser, authLimiter)
+	auth.POST("/resend-otp", h.Auth.ResendOTP, authLimiter)
+	auth.POST("/verify-otp", h.Auth.VerifyOTP, authLimiter)
+	auth.POST("/login", h.Auth.LoginUser, authLimiter)
 	auth.GET("/validate", h.Auth.ValidateSession, middleware.JWTVerify())
 	auth.GET("/logout", h.Auth.UserLogOut, middleware.JWTVerify())
 	auth.GET("/github/callback", h.Auth.GithubOAuthCallback, middleware.JWTVerify())
