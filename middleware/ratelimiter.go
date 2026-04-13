@@ -31,7 +31,6 @@ func RateLimitMiddleware(rdb *redis.Client, limit, window int, keyPrefix string)
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ip := c.RealIP()
-			fmt.Print("Client IP: ", ip, "\n")
 			key := fmt.Sprintf("rate_limit:%s:%s", keyPrefix, ip)
 
 			// EXECUTE LUA SCRIPT (Atomic!)
