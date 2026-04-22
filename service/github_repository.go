@@ -204,16 +204,16 @@ func (g *GitHubRepositoryService) QueryWorkspace(param models.WorkspaceQueryRequ
 	if err != nil {
 		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to classify query intent: %w", err)
 	}
-
+	fmt.Println(intent)
 	switch intent {
-	case "code_explanation":
+	case "intent:code_explanation":
 		return g.semantic_search(param.Query, workspaceID)
-	case "get_commits_by_author_and_date":
+	case "intent:get_commits_by_author_and_date":
 		fmt.Println("get_commits_by_author_and_date")
 		from, to := resolveDateRange(param.DateRange)
 		commits, _ := g.GitHubCommitsDomain.GetCommitsByAuthorAndDate(workspaceID, param.Author, from, to)
 		return g.generateCommitAnswer(param.Query, commits)
-	case "get_recent_commits":
+	case "intent:get_recent_commits":
 		from, _ := resolveDateRange(param.DateRange)
 		commits, _ := g.GitHubCommitsDomain.GetRecentCommitsByWorkspace(workspaceID, from)
 		return g.generateCommitAnswer(param.Query, commits)
@@ -229,7 +229,7 @@ func (g *GitHubRepositoryService) QueryWorkspace(param models.WorkspaceQueryRequ
 func (g *GitHubRepositoryService) generateCommitAnswer(query string, commits []models.GitHubCommits) (models.WorkspaceQueryResponse, error) {
 	if len(commits) == 0 {
 		return models.WorkspaceQueryResponse{
-			Answer:      "No commits found matching your query.",
+			Answer:      "No commits found of this user in this time period.",
 			ActionItems: []string{},
 			Sources:     []models.WorkspaceQuerySource{},
 		}, nil
@@ -318,6 +318,7 @@ func (g *GitHubRepositoryService) semantic_search(query string, workspaceID int6
 	if err != nil {
 		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
+	fmt.Println(embedding)
 
 	// 2. Vector similarity search scoped to workspace
 	results, err := g.CommitFileEmbeddingDomain.VectorSearchByWorkspace(
