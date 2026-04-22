@@ -16,11 +16,44 @@ type AiDomain interface {
 
 type AiDomainCtx struct{}
 
+type IntentResponse struct {
+	Intent string `json:"intent"`
+}
+
 func (a *AiDomainCtx) ClassifyQueryIntent(query string) (string, error) {
-	// Placeholder implementation. Replace with actual AI model inference.
-	// For example, you could integrate with OpenAI's API here.
-	return "get_commits_by_author_and_date", nil
-	// return `The intent of the query is to seek an explanation for a specific code change. The user likely wants to understand the rationale behind a code modification, the context in which it was made, and its implications on the overall codebase. This intent suggests that the user is looking for insights into why a particular change was implemented, what problem it addresses, and how it affects the functionality or performance of the software.
+	// Placeholder implementation for intent classification
+	aiServiceURL := config.GetConfig().AiBackendUrl + "/classify-query-intent"
+
+	requestBody := map[string]string{
+		"userQuery": query,
+	}
+	jsonData, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+	resp, err := http.Post(aiServiceURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to call AI service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("AI service returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read AI service response: %w", err)
+	}
+
+	var result IntentResponse
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return "intent:" + result.Intent, nil
 }
 
 func (g *AiDomainCtx) CallAzureChatCompletion(systemPrompt, userPrompt string) (string, error) {
