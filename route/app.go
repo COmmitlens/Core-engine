@@ -102,6 +102,7 @@ func App() AppModel {
 		GitHubRepositoryDomain:    gitHubRepositoryDomain,
 		GitHubCommitFilesDomain:   gitHubCommitFilesDomain,
 		CommitFileEmbeddingDomain: commitFileEmbeddingDomain,
+		WorkspaceDomain:           workspaceDomain,
 		QueueClient:               queueClient,
 	}
 

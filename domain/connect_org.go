@@ -23,6 +23,7 @@ type ConnectOrgDomain interface {
 	GenerateInstallationToken(appJwt string, url string) (string, error)
 	FetchAllRepositoriesWithCommits(installationToken string) (models.AllReposWithCommitsResponse, error)
 	FetchCommitDetail(token string, fullRepoName string, sha string) (*models.GitHubCommitDetail, error)
+	DeleteInstallationAndData(installationID int64) error
 }
 
 type ConnectOrgDomainCtx struct {
@@ -67,6 +68,12 @@ func (c *ConnectOrgDomainCtx) GenerateGitHubAppJWT() (string, error) {
 
 func (c *ConnectOrgDomainCtx) UpdateInstallationByUser(param models.GitHubInstallation) (string, error) {
 	db := config.DbManager()
+
+	// Verify the user exists before attempting the update to avoid FK violations
+	var user models.User
+	if err := db.Where("id = ?", param.UserID).First(&user).Error; err != nil {
+		return "", fmt.Errorf("user with id %d not found: please log in again", param.UserID)
+	}
 
 	// Start a transaction
 	tx := db.Begin()
@@ -160,6 +167,70 @@ func (c *ConnectOrgDomainCtx) FindInstallationByInstallationID(installationID in
 	}
 
 	return &installation, nil
+}
+
+// DeleteInstallationAndData removes the installation record and all associated repositories,
+// commits, and commit files. Called when a GitHub App installation is uninstalled.
+func (c *ConnectOrgDomainCtx) DeleteInstallationAndData(installationID int64) error {
+	db := config.DbManager()
+
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Find all repos for this installation to get their IDs
+	var repoIDs []int64
+	if err := tx.Model(&models.GitHubRepository{}).
+		Where("installation_id = ?", installationID).
+		Pluck("id", &repoIDs).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if len(repoIDs) > 0 {
+		// Find all commit IDs for these repos
+		var commitIDs []int64
+		if err := tx.Model(&models.GitHubCommits{}).
+			Where("github_repository_id IN ?", repoIDs).
+			Pluck("id", &commitIDs).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		if len(commitIDs) > 0 {
+			// Delete commit files
+			if err := tx.Where("github_commit_id IN ?", commitIDs).
+				Delete(&models.GitHubCommitFiles{}).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+			// Delete commits
+			if err := tx.Where("id IN ?", commitIDs).
+				Delete(&models.GitHubCommits{}).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+
+		// Delete repositories
+		if err := tx.Where("id IN ?", repoIDs).
+			Delete(&models.GitHubRepository{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	// Delete the installation record itself
+	if err := tx.Where("installation_id = ?", installationID).
+		Delete(&models.GitHubInstallation{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }
 
 func (c *ConnectOrgDomainCtx) UpdateInstallationMetadata(installationID int64, accountLogin string, accountType string) error {

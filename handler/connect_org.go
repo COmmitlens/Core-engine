@@ -96,6 +96,14 @@ func (connectOrgHandler *ConnectOrgHandler) HandleOrgCallback(c echo.Context) er
 	if err != nil {
 		return c.JSON(400, models.BasicResp{Message: "Invalid installation ID"})
 	}
+
+	// Security: verify this installation_id actually belongs to our GitHub App.
+	// Prevents an attacker from submitting a stolen installation_id from another app/org.
+	if err := connectOrgHandler.ConnectOrgService.VerifyInstallationBelongsToApp(installationIDInt); err != nil {
+		log.Printf("Installation verification failed: %v", err)
+		return c.JSON(403, models.BasicResp{Message: "Installation does not belong to this application"})
+	}
+
 	param := models.GitHubInstallationByUserReq{
 		UserID:         userID,
 		IsClaimed:      true,
@@ -163,7 +171,21 @@ func (h *ConnectOrgHandler) HandleWebhook(c echo.Context) error {
 			return c.JSON(400, map[string]string{"error": "invalid installation payload"})
 		}
 
-		if payload.Action != "created" {
+		switch payload.Action {
+		case "deleted":
+			// Security: when the app is uninstalled from an org/account, purge all
+			// stored repos, commits and commit files so ex-members cannot keep
+			// accessing private data after they (or the app) are removed.
+			if err := h.ConnectOrgService.ConnectOrgDomain.DeleteInstallationAndData(payload.Installation.ID); err != nil {
+				log.Printf("❌ Error deleting installation data for %d: %v", payload.Installation.ID, err)
+				return c.JSON(500, map[string]string{"error": "failed to remove installation data"})
+			}
+			log.Printf("✅ Installation %d deleted and all data purged", payload.Installation.ID)
+			return c.JSON(200, map[string]string{"status": "deleted"})
+
+		case "created":
+			// handled below
+		default:
 			return c.JSON(200, map[string]string{"status": "ignored"})
 		}
 

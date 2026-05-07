@@ -193,8 +193,8 @@ Related File %d:
 func (g *GitHubRepositoryService) buildSystemPrompt() string {
 	return `You are an expert code reviewer. Analyze commit changes and explain:
 1. What changed and why
-2. How it relates to historical changes
-3. Potential impact and patterns
+2. Major focus on user intent and reasoning behind the change, not just the surface-level diff
+3. response on the basic of user main question that is asked
 
 Be concise and technical.`
 }
@@ -448,10 +448,10 @@ Patch:
 RELATED CHANGES (%d similar commits):
 %s
 
-Provide a brief explanation of what changed, why, and any patterns from historical changes.
+User question: %s
 
-QUESTION:
-%s`, mainCommitFile.Filename, mainCommitFile.Status,
+Using the context above, provide a simple and direct answer to the user's question. Reference specific changes when relevant.`,
+		mainCommitFile.Filename, mainCommitFile.Status,
 		mainCommitFile.Additions, mainCommitFile.Deletions, mainPatch,
 		relatedCount, relatedFilesContext, question)
 }
