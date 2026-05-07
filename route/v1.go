@@ -8,10 +8,10 @@ import (
 )
 
 func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
-	// 5 requests / 60s per IP — applied only to sensitive auth endpoints
-	authLimiter := middleware.RateLimitMiddleware(rdb, 5, 60, "auth")
-	// 30 requests / 60s per IP — applied to all other v1 routes
-	g.Use(middleware.RateLimitMiddleware(rdb, 30, 60, "api"))
+	// 50 requests / 60s per IP — applied only to sensitive auth endpoints
+	authLimiter := middleware.RateLimitMiddleware(rdb, 50, 60, "auth")
+	// 100 requests / 60s per IP — applied to all other v1 routes
+	g.Use(middleware.RateLimitMiddleware(rdb, 100, 60, "api"))
 	g.GET("/health", h.Health.Check)
 
 	auth := g.Group("/auth")

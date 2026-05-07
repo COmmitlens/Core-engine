@@ -29,6 +29,7 @@ type ConnectOrgService struct {
 	GitHubRepositoryDomain    domain.GitHubRepositoryDomain
 	GitHubCommitFilesDomain   domain.GitHubCommitFilesDomain
 	CommitFileEmbeddingDomain domain.CommitFileEmbeddingDomain
+	WorkspaceDomain           domain.WorkspaceDomain
 	QueueClient               *queue.Client
 }
 
@@ -425,6 +426,15 @@ func (c *ConnectOrgService) EmbedCommitFile2(param models.EmbedCommitFile2) erro
 }
 
 func (c *ConnectOrgService) RedirectToOrgAuth(payload models.JWTPayload) (string, error) {
+	// Security: verify the requesting user is the owner of the workspace they are connecting
+	workspace, err := c.WorkspaceDomain.GetById(models.Workspace{ID: payload.WorkspaceID})
+	if err != nil {
+		return "", fmt.Errorf("workspace not found")
+	}
+	if workspace.OwnerID != payload.ID {
+		return "", fmt.Errorf("only the workspace owner can connect a GitHub organization")
+	}
+
 	token, err := GenerateJWT(payload)
 	if err != nil {
 		return "", err
@@ -433,6 +443,53 @@ func (c *ConnectOrgService) RedirectToOrgAuth(payload models.JWTPayload) (string
 	redirectURL := fmt.Sprintf("https://github.com/apps/office-aiii/installations/new?state=%s", token)
 
 	return redirectURL, nil
+}
+
+// VerifyInstallationBelongsToApp uses the GitHub App JWT to confirm the given
+// installation_id is a real installation of OUR app. This prevents an attacker
+// from submitting a stolen or fabricated installation_id.
+func (c *ConnectOrgService) VerifyInstallationBelongsToApp(installationID int64) error {
+	appJWT, err := GenerateGitHubAppJWT()
+	if err != nil {
+		return fmt.Errorf("failed to generate app JWT: %w", err)
+	}
+
+	url := fmt.Sprintf("https://api.github.com/app/installations/%d", installationID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+appJWT)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("GitHub API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return fmt.Errorf("installation_id %d not found — does not belong to this app", installationID)
+	}
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		AppID int64 `json:"app_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to parse GitHub response: %w", err)
+	}
+
+	expectedAppID := config.GetConfig().GitHubAppID
+	if result.AppID != expectedAppID {
+		return fmt.Errorf("installation app_id mismatch: got %d, expected %d", result.AppID, expectedAppID)
+	}
+
+	return nil
 }
 
 func (c *ConnectOrgService) StoreInstallation(params models.GitHubInstallation) (string, error) {
