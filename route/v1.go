@@ -65,4 +65,23 @@ func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
 	githubRepo.POST("/commit-files/:commit_file_id/explain", h.GitHubRepository.ExplainCommitFileChange)
 	githubRepo.POST("/backfill-embeddings", h.GitHubRepository.BackfillEmbeddings)
 
+	// ── Direct Messages ────────────────────────────────────────────────────────
+	dm := g.Group("/dm", middleware.JWTVerify())
+	dm.POST("/start", h.DM.StartConversation)
+	dm.GET("/conversations", h.DM.ListConversations)
+	dm.POST("/send", h.DM.SendMessage)
+	dm.GET("/messages", h.DM.ListMessages)
+	dm.POST("/read", h.DM.MarkRead)
+
+	// WebSocket — real-time messaging
+	// GET /v1/dm/ws?conversation_id=1
+	// Token must be passed as ?token=<jwt> because browsers can't set
+	// Authorization headers on WebSocket connections.
+	dm.GET("/ws", h.DM.ServeWS)
+
+	slack := g.Group("/slack")
+	slack.POST("/events", h.Slack.HandleEvent)
+	slack.GET("/install", h.Slack.Install, middleware.JWTVerify())
+	slack.GET("/oauth/callback", h.Slack.OAuthCallback)
+	slack.GET("/status", h.Slack.Status, middleware.JWTVerify())
 }

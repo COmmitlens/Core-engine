@@ -38,6 +38,10 @@ type Configuration struct {
 	GithubAuthClientID     string `env:"GITHUB_AUTH_CLIENT_ID"`
 	GithubAuthClientSecret string `env:"GITHUB_AUTH_CLIENT_SECRET"`
 	GithubAuthRedirectURL  string `env:"GITHUB_AUTH_REDIRECT_URL"`
+	SlackClientID          string `env:"SLACK_APP_CLIENT_ID"`
+	SlackClientSecret      string `env:"SLACK_APP_CLIENT_SECRET"`
+	SlackSigningSecret     string `env:"SLACK_APP_SIGNING_SECRET"`
+	SlackRedirectURI       string `env:"SLACK_REDIRECT_URI"`
 }
 
 func GetConfig() Configuration {
