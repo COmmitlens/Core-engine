@@ -49,51 +49,38 @@ func (s *SlackService) GetStatusByWorkspace(workspaceID int64) (models.SlackInst
 // HandleMessage processes an incoming Slack message event.
 // Called in a goroutine — do not write to the echo context here.
 func (s *SlackService) HandleMessage(event models.SlackMessageEvent) {
-	// log.Printf("[slack] Message from user=%s channel=%s text=%q", event.UserID, event.ChannelID, event.Text)
-
-	// // Step 1: Only process questions
-	// if !isQuestion(event.Text) {
-	// 	return
-	// }
-
-	// // Step 2: Find the CommitLens workspace linked to this Slack team
-	// install, err := s.SlackDomain.GetInstallationByTeamID(event.TeamID)
-	// if err != nil {
-	// 	log.Printf("[slack] No installation found for team %s: %v", event.TeamID, err)
-	// 	return
-	// }
-
-	// // Step 3: Query commit embeddings using existing AI pipeline
-	// if s.GitHubRepositoryService == nil {
-	// 	return
-	// }
-	// result, err := s.GitHubRepositoryService.QueryWorkspace(
-	// 	models.WorkspaceQueryRequest{Query: event.Text},
-	// 	install.WorkspaceID,
-	// )
-	// if err != nil || result.Answer == "" {
-	// 	log.Printf("[slack] No answer found for query: %s", event.Text)
-	// 	return
-	// }
-
-	// // Step 4: Reply in the Slack thread
-	// if err := s.replyInThread(install.BotToken, event.ChannelID, event.Timestamp, result.Answer); err != nil {
-	// 	log.Printf("[slack] Failed to reply in thread: %v", err)
-	// }
-
 	log.Printf("[slack] Message from user=%s channel=%s text=%q", event.UserID, event.ChannelID, event.Text)
 
-	// Find the bot token for this Slack team
+	// Step 1: Only process questions
+	if !isQuestion(event.Text) {
+		return
+	}
+
+	// Step 2: Find the CommitLens workspace linked to this Slack team
 	install, err := s.SlackDomain.GetInstallationByTeamID(event.TeamID)
 	if err != nil {
 		log.Printf("[slack] No installation found for team %s: %v", event.TeamID, err)
 		return
 	}
 
-	// Simple test reply
-	if err := s.replyInThread(install.BotToken, event.ChannelID, event.Timestamp, "CommitLens reply 👋"); err != nil {
-		log.Printf("[slack] Failed to reply: %v", err)
+	// Step 3: Query commit embeddings using existing AI pipeline
+	if s.GitHubRepositoryService == nil {
+		return
 	}
+	result, err := s.GitHubRepositoryService.QueryWorkspace(
+		models.WorkspaceQueryRequest{Query: event.Text},
+		install.WorkspaceID,
+	)
+	if err != nil || result.Answer == "" {
+		log.Printf("[slack] No answer found for query: %s", event.Text)
+		return
+	}
+
+	// Step 4: Reply in the Slack thread
+	if err := s.replyInThread(install.BotToken, event.ChannelID, event.Timestamp, result.Answer); err != nil {
+		log.Printf("[slack] Failed to reply in thread: %v", err)
+	}
+
 }
 
 // replyInThread posts a message back to Slack in the same thread as the original message.
