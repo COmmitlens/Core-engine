@@ -16,6 +16,18 @@ type BackfillCommitFileRow struct {
 	Message        string `gorm:"column:message"`
 }
 
+type CommitFileHistory struct {
+	CommitFileID int64     `json:"commit_file_id"`
+	CommitSHA    string    `json:"commit_sha"`
+	Author       string    `json:"author"`
+	CommittedAt  time.Time `json:"committed_at"`
+	Message      string    `json:"message"`
+	Status       string    `json:"status"`
+	Additions    int       `json:"additions"`
+	Deletions    int       `json:"deletions"`
+	Patch        string    `json:"patch"`
+}
+
 type GitHubCommitFiles struct {
 	ID             int64     `gorm:"column:id;primaryKey"`
 	GithubCommitID int64     `gorm:"column:github_commit_id;index;not null"`
@@ -27,3 +39,4 @@ type GitHubCommitFiles struct {
 	GithubRepoID   int64     `gorm:"column:github_repo_id;index;not null"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
 }
+

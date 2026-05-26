@@ -204,7 +204,6 @@ func (g *GitHubRepositoryService) QueryWorkspace(param models.WorkspaceQueryRequ
 	if err != nil {
 		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to classify query intent: %w", err)
 	}
-	fmt.Println(intent)
 	switch intent {
 	case "intent:code_explanation":
 		return g.semantic_search(param.Query, workspaceID)
@@ -454,4 +453,15 @@ Using the context above, provide a simple and direct answer to the user's questi
 		mainCommitFile.Filename, mainCommitFile.Status,
 		mainCommitFile.Additions, mainCommitFile.Deletions, mainPatch,
 		relatedCount, relatedFilesContext, question)
+}
+
+func (g *GitHubRepositoryService) GetCommitFileHistory(repoID int64, filename string) ([]models.CommitFileHistory, error) {
+	return g.GitHubCommitFilesDomain.GetCommitFileHistory(repoID, filename)
+}
+
+func (g *GitHubRepositoryService) SearchCommitsByKeyword(workspaceID int64, keyword string, limit int) ([]models.CommitKeywordSearchResult, error) {
+	if keyword == "" {
+		return nil, fmt.Errorf("keyword is required")
+	}
+	return g.GitHubCommitsDomain.SearchCommitsByKeyword(workspaceID, keyword, limit)
 }

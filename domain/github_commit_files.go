@@ -10,6 +10,7 @@ type GitHubCommitFilesDomain interface {
 	GetGitHubCommitFilesByID(commitFileID int64) (models.GitHubCommitFiles, error)
 	GetCommitFilesDetailsByCommitId(param models.GitHubCommitFiles) ([]models.GitHubCommitFiles, error)
 	GetUnembeddedCommitFiles() ([]models.BackfillCommitFileRow, error)
+	GetCommitFileHistory(repoID int64, filename string) ([]models.CommitFileHistory, error)
 }
 
 type GitHubCommitFilesDomainCtx struct{}
@@ -54,6 +55,31 @@ func (g *GitHubCommitFilesDomainCtx) GetCommitFilesDetailsByCommitId(param model
 	}
 
 	return commitFileDetails, nil
+}
+
+func (g *GitHubCommitFilesDomainCtx) GetCommitFileHistory(repoID int64, filename string) ([]models.CommitFileHistory, error) {
+	db := config.DbManager()
+
+	var rows []models.CommitFileHistory
+	err := db.Raw(`
+		SELECT
+			f.id                     AS commit_file_id,
+			c.commit_sha,
+			c.github_author_name     AS author,
+			c.committed_at,
+			c.commit_message         AS message,
+			f.status,
+			f.additions,
+			f.deletions,
+			f.patch
+		FROM git_hub_commit_files f
+		JOIN git_hub_commits c ON c.id = f.github_commit_id
+		WHERE f.github_repo_id = ?
+		  AND f.filename = ?
+		ORDER BY c.committed_at DESC
+	`, repoID, filename).Scan(&rows).Error
+
+	return rows, err
 }
 
 // GetUnembeddedCommitFiles returns all commit files that have a usable patch

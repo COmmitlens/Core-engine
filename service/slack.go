@@ -80,7 +80,6 @@ func (s *SlackService) HandleMessage(event models.SlackMessageEvent) {
 	if err := s.replyInThread(install.BotToken, event.ChannelID, event.Timestamp, result.Answer); err != nil {
 		log.Printf("[slack] Failed to reply in thread: %v", err)
 	}
-
 }
 
 // replyInThread posts a message back to Slack in the same thread as the original message.
