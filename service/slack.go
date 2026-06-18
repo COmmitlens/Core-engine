@@ -67,7 +67,7 @@ func (s *SlackService) HandleMessage(event models.SlackMessageEvent) {
 	if s.GitHubRepositoryService == nil {
 		return
 	}
-	result, err := s.GitHubRepositoryService.QueryWorkspace(
+	result, err := s.GitHubRepositoryService.QueryToWorkspace(
 		models.WorkspaceQueryRequest{Query: event.Text},
 		install.WorkspaceID,
 	)

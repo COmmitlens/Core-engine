@@ -82,6 +82,31 @@ func (githubRepositoryHandler *GitHubRepositoryHandler) ExplainCommitFileChange(
 	return c.JSON(http.StatusOK, explainedAnswer)
 }
 
+// new ReAct method
+func (githubRepositoryHandler *GitHubRepositoryHandler) QueryToWorkspace(c echo.Context) error {
+	workspaceID := c.Param("workspace_id")
+	workspaceIDInt, err := strconv.ParseInt(workspaceID, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid workspace_id"})
+	}
+
+	var param models.WorkspaceQueryRequest
+	if err := c.Bind(&param); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
+	if param.Query == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "query is required"})
+	}
+
+	response, err := githubRepositoryHandler.GitHubRepositoryService.QueryToWorkspace(param, workspaceIDInt)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// previous ai ways
 func (githubRepositoryHandler *GitHubRepositoryHandler) QueryWorkspace(c echo.Context) error {
 	workspaceID := c.Param("workspace_id")
 	workspaceIDInt, err := strconv.ParseInt(workspaceID, 10, 64)

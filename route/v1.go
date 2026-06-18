@@ -41,7 +41,7 @@ func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
 	workspace.GET("/get_repo_commits/:repo_id", h.Workspace.GetRepoCommits)
 	workspace.GET("/get_commit_details/:github_commit_id", h.Workspace.GetCommitFilesDetails)
 	workspace.POST("/get_members", h.Workspace.GetWorkSpaceMembers)
-	workspace.POST("/:workspace_id/query", h.GitHubRepository.QueryWorkspace)
+	workspace.POST("/:workspace_id/query", h.GitHubRepository.QueryToWorkspace)
 	workspace.GET("/:workspace_id/search", h.GitHubRepository.SearchCommitsByKeyword)
 
 	g.POST("/workspace/accept-invite", h.Workspace.AcceptInvite)

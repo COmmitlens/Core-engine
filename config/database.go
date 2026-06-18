@@ -32,8 +32,26 @@ func DbInit() {
 
 	fmt.Println("Connected to Database")
 
-	// Uncomment if you have models to migrate
-	err = db.AutoMigrate(&models.SlackInstallation{})
+	// Auto-migrate all tables
+	err = db.AutoMigrate(
+		&models.User{},
+		&models.Workspace{},
+		&models.ManageWorkspace{},
+		&models.Role{},
+		&models.Channels{},
+		&models.ManageChannels{},
+		&models.Credentials{},
+		&models.GitHubInstallation{},
+		&models.GitHubRepository{},
+		&models.GitHubCommits{},
+		&models.GitHubCommitFiles{},
+		&models.CommitFileEmbedding{},
+		&models.SlackInstallation{},
+		&models.DMConversation{},
+		&models.DMMessage{},
+		&models.Payment{},
+		&models.Customer{},
+	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
