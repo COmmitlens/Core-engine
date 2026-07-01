@@ -3,6 +3,7 @@ package domain
 import (
 	"core/config"
 	"core/models"
+	"fmt"
 )
 
 type GitHubRepositoryDomain interface {
@@ -12,6 +13,7 @@ type GitHubRepositoryDomain interface {
 	FindRepositoryByInstallationID(params models.GitHubRepository) (models.GitHubRepository, error)
 	FindUserIdByInstallationID(params models.GitHubRepository) (int64, error)
 	GetByID(id int64) (models.GitHubRepository, error)
+	DeleteByGithubRepoID(githubRepoID int64) error
 }
 
 type GitHubRepositoryDomainCtx struct{}
@@ -111,4 +113,75 @@ func (g *GitHubRepositoryDomainCtx) FindUserIdByInstallationID(params models.Git
 	}
 
 	return repository.UserID, nil
+}
+
+// DeleteByGithubRepoID removes a repository and all its associated commits, commit
+// files, and embeddings identified by the GitHub repository ID.
+func (g *GitHubRepositoryDomainCtx) DeleteByGithubRepoID(githubRepoID int64) error {
+	db := config.DbManager()
+
+	tx := db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Find the internal repo record
+	var repo models.GitHubRepository
+	if err := tx.Where("github_repo_id = ?", githubRepoID).First(&repo).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("repo with github_repo_id %d not found: %w", githubRepoID, err)
+	}
+
+	// Collect commit IDs for this repo
+	var commitIDs []int64
+	if err := tx.Model(&models.GitHubCommits{}).
+		Where("github_repository_id = ?", repo.ID).
+		Pluck("id", &commitIDs).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	if len(commitIDs) > 0 {
+		// Collect commit file IDs
+		var fileIDs []int64
+		if err := tx.Model(&models.GitHubCommitFiles{}).
+			Where("github_commit_id IN ?", commitIDs).
+			Pluck("id", &fileIDs).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		if len(fileIDs) > 0 {
+			// Delete embeddings for those files
+			if err := tx.Where("commit_file_id IN ?", fileIDs).
+				Delete(&models.CommitFileEmbedding{}).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+			// Delete commit files
+			if err := tx.Where("id IN ?", fileIDs).
+				Delete(&models.GitHubCommitFiles{}).Error; err != nil {
+				tx.Rollback()
+				return err
+			}
+		}
+
+		// Delete commits
+		if err := tx.Where("id IN ?", commitIDs).
+			Delete(&models.GitHubCommits{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	// Delete the repository itself
+	if err := tx.Where("github_repo_id = ?", githubRepoID).
+		Delete(&models.GitHubRepository{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	return tx.Commit().Error
 }

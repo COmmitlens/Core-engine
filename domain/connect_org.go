@@ -22,6 +22,7 @@ type ConnectOrgDomain interface {
 	FindInstallationByID(Id int64) (*models.GitHubInstallation, error)
 	GenerateInstallationToken(appJwt string, url string) (string, error)
 	FetchAllRepositoriesWithCommits(installationToken string) (models.AllReposWithCommitsResponse, error)
+	FetchRecentCommits(token string, fullRepoName string) ([]models.GitHubCommit, error)
 	FetchCommitDetail(token string, fullRepoName string, sha string) (*models.GitHubCommitDetail, error)
 	DeleteInstallationAndData(installationID int64) error
 }
