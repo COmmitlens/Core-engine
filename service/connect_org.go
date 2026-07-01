@@ -678,3 +678,90 @@ func (c *ConnectOrgService) HandlePushEvent(params models.GitHubPushEvent) error
 
 	return nil
 }
+
+// HandleInstallationRepositoriesEvent processes GitHub's "installation_repositories"
+// webhook. Added repos have their commits fetched and stored (with embeddings queued);
+// removed repos and all their data are purged from the database.
+func (c *ConnectOrgService) HandleInstallationRepositoriesEvent(payload models.GitHubInstallationRepositoriesEvent) error {
+	installationID := payload.Installation.ID
+
+	// Look up the installation to retrieve the user/workspace context.
+	installation, err := c.ConnectOrgDomain.FindInstallationByInstallationID(installationID)
+	if err != nil || installation == nil {
+		return fmt.Errorf("installation %d not found: %v", installationID, err)
+	}
+
+	// --- Handle removed repos first (fast, no API calls needed) ---
+	for _, repo := range payload.RepositoriesRemoved {
+		if err := c.GitHubRepositoryDomain.DeleteByGithubRepoID(repo.ID); err != nil {
+			fmt.Printf("[install_repos] failed to delete repo %s (github_id=%d): %v\n",
+				repo.FullName, repo.ID, err)
+			// non-fatal: continue with remaining repos
+		} else {
+			fmt.Printf("[install_repos] deleted repo %s (github_id=%d)\n", repo.FullName, repo.ID)
+		}
+	}
+
+	// --- Handle added repos ---
+	if len(payload.RepositoriesAdded) == 0 {
+		return nil
+	}
+
+	// Generate an installation token to talk to the GitHub API.
+	token, err := c.GenerateInstallationToken(models.GenerateInstallationTokenReq{
+		ID:     installationID,
+		UserID: installation.UserID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to generate installation token for %d: %w", installationID, err)
+	}
+
+	addedRepos := models.AllReposWithCommitsResponse{
+		TotalRepositories: len(payload.RepositoriesAdded),
+		Repositories:      make([]models.RepositoryCommitsResponse, 0, len(payload.RepositoriesAdded)),
+	}
+
+	for _, repo := range payload.RepositoriesAdded {
+		fmt.Printf("[install_repos] fetching commits for new repo %s\n", repo.FullName)
+
+		commits, err := c.ConnectOrgDomain.FetchRecentCommits(token, repo.FullName)
+		if err != nil {
+			fmt.Printf("[install_repos] error fetching commits for %s: %v\n", repo.FullName, err)
+			continue
+		}
+
+		repoEntry := models.RepositoryCommitsResponse{
+			RepoID:       repo.ID,
+			RepoName:     repo.Name,
+			RepoFullName: repo.FullName,
+			Private:      repo.Private,
+			Commits:      make([]models.CommitDetailResponse, 0, len(commits)),
+		}
+
+		for _, commit := range commits {
+			detail, err := c.ConnectOrgDomain.FetchCommitDetail(token, repo.FullName, commit.SHA)
+			if err != nil {
+				fmt.Printf("[install_repos] error fetching commit detail %s: %v\n", commit.SHA, err)
+				continue
+			}
+			repoEntry.Commits = append(repoEntry.Commits, models.CommitDetailResponse{
+				SHA:         detail.SHA,
+				Message:     detail.Commit.Message,
+				Author:      detail.Commit.Author.Name,
+				AuthorEmail: detail.Commit.Author.Email,
+				Date:        detail.Commit.Author.Date,
+				Files:       detail.Files,
+			})
+		}
+
+		addedRepos.Repositories = append(addedRepos.Repositories, repoEntry)
+	}
+
+	if err := c.StoreRepositoriesAndCommits(installationID, installation.UserID, addedRepos); err != nil {
+		return fmt.Errorf("failed to store repos for installation %d: %w", installationID, err)
+	}
+
+	fmt.Printf("[install_repos] stored %d new repo(s) for installation %d\n",
+		len(addedRepos.Repositories), installationID)
+	return nil
+}

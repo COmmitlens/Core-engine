@@ -146,3 +146,27 @@ type OrgDetailsResponse struct {
 	WorkspaceID    int64                      `json:"workspace_id"`
 	Repositories   []GitHubRepositoryResponse `json:"repositories"`
 }
+
+// GitHubInstallationRepoRef represents a repository entry in installation_repositories events.
+type GitHubInstallationRepoRef struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	FullName string `json:"full_name"`
+	Private  bool   `json:"private"`
+}
+
+// GitHubInstallationRepositoriesEvent is the webhook payload for the
+// "installation_repositories" event fired by GitHub when repos are added
+// or removed from an installation.
+type GitHubInstallationRepositoriesEvent struct {
+	Action       string `json:"action"` // "added" | "removed"
+	Installation struct {
+		ID      int64 `json:"id"`
+		Account struct {
+			Login string `json:"login"`
+			Type  string `json:"type"`
+		} `json:"account"`
+	} `json:"installation"`
+	RepositoriesAdded   []GitHubInstallationRepoRef `json:"repositories_added"`
+	RepositoriesRemoved []GitHubInstallationRepoRef `json:"repositories_removed"`
+}

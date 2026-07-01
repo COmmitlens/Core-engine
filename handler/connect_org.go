@@ -235,6 +235,24 @@ func (h *ConnectOrgHandler) HandleWebhook(c echo.Context) error {
 
 		return c.JSON(200, map[string]string{"status": "push_received"})
 
+	case "installation_repositories":
+		// Fired when repositories are added to or removed from an installation.
+		var payload models.GitHubInstallationRepositoriesEvent
+		if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+			return c.JSON(400, map[string]string{"error": "invalid installation_repositories payload"})
+		}
+
+		log.Printf("✅ INSTALLATION_REPOSITORIES EVENT: action=%s added=%d removed=%d",
+			payload.Action, len(payload.RepositoriesAdded), len(payload.RepositoriesRemoved))
+
+		// Enqueue for background processing
+		if err := h.ConnectOrgService.QueueClient.EnqueueHandleInstallationRepositoriesEvent(bodyBytes); err != nil {
+			log.Printf("❌ Error enqueuing installation_repositories event: %v\n", err)
+			return c.JSON(500, map[string]string{"error": "failed to enqueue installation_repositories event"})
+		}
+
+		return c.JSON(200, map[string]string{"status": "installation_repositories_received"})
+
 	default:
 		return c.JSON(200, map[string]string{"status": "ignored"})
 	}

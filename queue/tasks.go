@@ -2,10 +2,11 @@ package queue
 
 // Task type constants for asynq queue
 const (
-	TypeFetchAndStoreRepos = "github:fetch_and_store_repos"
-	TypeEmbedCommitFile    = "github:embed_commit_file"
-	TypeEmbedCommitFileV2  = "github:embed_commit_file_v2"
-	TypeHandlePushEvent    = "github:handle_push_event"
+	TypeFetchAndStoreRepos                  = "github:fetch_and_store_repos"
+	TypeEmbedCommitFile                     = "github:embed_commit_file"
+	TypeEmbedCommitFileV2                   = "github:embed_commit_file_v2"
+	TypeHandlePushEvent                     = "github:handle_push_event"
+	TypeHandleInstallationRepositoriesEvent = "github:handle_installation_repositories_event"
 )
 
 // FetchAndStoreReposPayload is the payload for the fetch-and-store-repos task
@@ -44,5 +45,10 @@ type EmbedCommitFileV2Payload struct {
 
 // HandlePushEventPayload wraps the raw GitHub push webhook JSON
 type HandlePushEventPayload struct {
+	RawJSON []byte `json:"raw_json"`
+}
+
+// HandleInstallationRepositoriesPayload wraps the raw installation_repositories webhook JSON
+type HandleInstallationRepositoriesPayload struct {
 	RawJSON []byte `json:"raw_json"`
 }
