@@ -1,5 +1,6 @@
 .env
 config/*.json
 /tmp/*
+deploy/certs/
 book-world-b0429-firebase-adminsdk-fbsvc-31c7b10de9.json
 firebase.go

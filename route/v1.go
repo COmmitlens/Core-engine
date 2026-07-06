@@ -65,4 +65,7 @@ func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
 	githubRepo.POST("/commit-files/:commit_file_id/explain", h.GitHubRepository.ExplainCommitFileChange)
 	githubRepo.POST("/backfill-embeddings", h.GitHubRepository.BackfillEmbeddings)
 
+	waitinglist := g.Group("/waitlist")
+	waitinglist.POST("/add", h.Waitlist.AddToWaitlist)
+
 }

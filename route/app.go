@@ -23,6 +23,7 @@ type AppModel struct {
 	Credentials      handler.CredentialsHandler
 	ConnectOrg       handler.ConnectOrgHandler
 	GitHubRepository handler.GitHubRepositoryHandler
+	Waitlist         handler.WaitlistHandler
 }
 
 func App() AppModel {
@@ -53,7 +54,7 @@ func App() AppModel {
 	commitFileEmbeddingDomain := &domain.CommitFileEmbeddingDomainCtx{}
 	gitHubInstallationsDomain := &domain.GitHubInstallationsDomainCtx{}
 	aiDomain := &domain.AiDomainCtx{}
-
+	waitlistDomain := &domain.WaitlistDomainCtx{}
 	//service
 	healthService := service.HealthService{
 		HealthDomain: healthDomain,
@@ -104,6 +105,9 @@ func App() AppModel {
 		CommitFileEmbeddingDomain: commitFileEmbeddingDomain,
 		WorkspaceDomain:           workspaceDomain,
 		QueueClient:               queueClient,
+	}
+	waitlistService := service.WaitlistService{
+		WaitlistDomain: waitlistDomain,
 	}
 
 	// Start the asynq worker server (processes enqueued tasks in background)
@@ -156,6 +160,9 @@ func App() AppModel {
 	gitHubRepositoryHandler := handler.GitHubRepositoryHandler{
 		GitHubRepositoryService: gitHubRepositoryService,
 	}
+	waitlistHandler := handler.WaitlistHandler{
+		WaitlistService: waitlistService,
+	}
 
 	return AppModel{
 		Health:           healthHandler,
@@ -169,5 +176,6 @@ func App() AppModel {
 		Credentials:      credentialsHandler,
 		ConnectOrg:       connectOrgHandler,
 		GitHubRepository: gitHubRepositoryHandler,
+		Waitlist:         waitlistHandler,
 	}
 }
