@@ -39,14 +39,10 @@ services:
       retries: 5
 
   # ─────────────────────────────────────────────
-  # CommitLens API (Go backend)
-  #
-  # Pin COMMITLENS_VERSION in .env to a specific release, e.g. v1.2.3
-  # To upgrade: change the version, then run:
-  #   docker compose pull && docker compose up -d
+  # Go backend (Core-engine)
   # ─────────────────────────────────────────────
   app:
-    image: ghcr.io/commitlens/commitlens-core:${COMMITLENS_VERSION:-latest}
+    image: ghcr.io/commitlens/commitlens-core:${CORE_VERSION:-latest}
     container_name: commitlens_app
     restart: unless-stopped
     env_file:
@@ -68,6 +64,39 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # ─────────────────────────────────────────────
+  # Python FastAPI AI backend (core-ai)
+  # ─────────────────────────────────────────────
+  ai:
+    image: ghcr.io/commitlens/commitlens-ai:${AI_VERSION:-latest}
+    container_name: commitlens_ai
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_URL: "postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+
+  # ─────────────────────────────────────────────
+  # Next.js frontend (twin-ai-fe)
+  # ─────────────────────────────────────────────
+  frontend:
+    image: ghcr.io/commitlens/twin-ai-fe:${FRONTEND_VERSION:-latest}
+    container_name: commitlens_frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+      NEXT_PUBLIC_AI_URL: "http://localhost:8001"
+    depends_on:
+      - app
+      - ai
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres_data:
