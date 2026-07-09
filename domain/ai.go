@@ -57,7 +57,7 @@ func (a *AiDomainCtx) ClassifyQueryIntent(query string) (string, error) {
 }
 
 func (g *AiDomainCtx) CallAzureChatCompletion(systemPrompt, userPrompt string) (string, error) {
-	aiServiceURL := config.GetConfig().AiBackendUrl + "/explain-commit-file-change"
+	aiServiceURL := config.GetConfig().AiBackendUrl + "/ai/explain-commit-file-change"
 
 	requestBody := map[string]string{
 		"systemPrompt": systemPrompt,
