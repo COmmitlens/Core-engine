@@ -110,3 +110,26 @@ func (c *Client) EnqueueHandlePushEvent(rawJSON []byte) error {
 	log.Printf("[queue] Enqueued task %s: id=%s", TypeHandlePushEvent, info.ID)
 	return nil
 }
+
+// EnqueueHandleInstallationRepositoriesEvent enqueues a GitHub installation_repositories
+// webhook for background processing (repos added/removed from an installation).
+func (c *Client) EnqueueHandleInstallationRepositoriesEvent(rawJSON []byte) error {
+	payload := HandleInstallationRepositoriesPayload{RawJSON: rawJSON}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal HandleInstallationRepositoriesEvent payload: %w", err)
+	}
+
+	task := asynq.NewTask(TypeHandleInstallationRepositoriesEvent, data,
+		asynq.MaxRetry(3),
+		asynq.Timeout(10*time.Minute),
+		asynq.Queue("webhooks"),
+	)
+
+	info, err := c.client.EnqueueContext(context.Background(), task)
+	if err != nil {
+		return fmt.Errorf("failed to enqueue HandleInstallationRepositoriesEvent: %w", err)
+	}
+	log.Printf("[queue] Enqueued task %s: id=%s", TypeHandleInstallationRepositoriesEvent, info.ID)
+	return nil
+}

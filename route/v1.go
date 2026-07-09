@@ -86,4 +86,7 @@ func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
 	slack.GET("/install", h.Slack.Install, middleware.JWTVerify())
 	slack.GET("/oauth/callback", h.Slack.OAuthCallback)
 	slack.GET("/status", h.Slack.Status, middleware.JWTVerify())
+	waitinglist := g.Group("/waitlist")
+	waitinglist.POST("/add", h.Waitlist.AddToWaitlist)
+
 }

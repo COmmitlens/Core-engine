@@ -26,6 +26,7 @@ type AppModel struct {
 	GitHubRepository handler.GitHubRepositoryHandler
 	DM               handler.DMHandler
 	Slack            handler.SlackHandler
+	Waitlist         handler.WaitlistHandler
 }
 
 func App() AppModel {
@@ -62,6 +63,7 @@ func App() AppModel {
 	// WebSocket hub — single shared instance for the lifetime of the process.
 	hub := ws.NewHub()
 
+	waitlistDomain := &domain.WaitlistDomainCtx{}
 	//service
 	healthService := service.HealthService{
 		HealthDomain: healthDomain,
@@ -118,6 +120,9 @@ func App() AppModel {
 		CommitFileEmbeddingDomain: commitFileEmbeddingDomain,
 		WorkspaceDomain:           workspaceDomain,
 		QueueClient:               queueClient,
+	}
+	waitlistService := service.WaitlistService{
+		WaitlistDomain: waitlistDomain,
 	}
 
 	// Start the asynq worker server (processes enqueued tasks in background)
@@ -182,6 +187,10 @@ func App() AppModel {
 	slackHandler := handler.SlackHandler{
 		SlackService: slackService,
 	}
+	waitlistHandler := handler.WaitlistHandler{
+		WaitlistService: waitlistService,
+	}
+
 	return AppModel{
 		Health:           healthHandler,
 		User:             userHandler,
@@ -196,5 +205,6 @@ func App() AppModel {
 		GitHubRepository: gitHubRepositoryHandler,
 		DM:               dmHandler,
 		Slack:            slackHandler,
+		Waitlist:         waitlistHandler,
 	}
 }

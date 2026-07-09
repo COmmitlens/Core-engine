@@ -18,6 +18,7 @@ func RegisterTaskHandlers(mux *asynq.ServeMux, svc *service.ConnectOrgService) {
 	mux.HandleFunc(queue.TypeEmbedCommitFile, handleEmbedCommitFile(svc))
 	mux.HandleFunc(queue.TypeEmbedCommitFileV2, handleEmbedCommitFileV2(svc))
 	mux.HandleFunc(queue.TypeHandlePushEvent, handlePushEvent(svc))
+	mux.HandleFunc(queue.TypeHandleInstallationRepositoriesEvent, handleInstallationRepositoriesEvent(svc))
 }
 
 // --- Task Handlers ---
@@ -108,5 +109,25 @@ func handlePushEvent(svc *service.ConnectOrgService) func(ctx context.Context, t
 			payload.Repository.FullName, payload.Installation.ID, len(payload.Commits))
 
 		return svc.HandlePushEvent(payload)
+	}
+}
+
+func handleInstallationRepositoriesEvent(svc *service.ConnectOrgService) func(ctx context.Context, t *asynq.Task) error {
+	return func(ctx context.Context, t *asynq.Task) error {
+		var p queue.HandleInstallationRepositoriesPayload
+		if err := json.Unmarshal(t.Payload(), &p); err != nil {
+			return fmt.Errorf("unmarshal HandleInstallationRepositoriesEvent payload: %w", err)
+		}
+
+		var payload models.GitHubInstallationRepositoriesEvent
+		if err := json.Unmarshal(p.RawJSON, &payload); err != nil {
+			return fmt.Errorf("unmarshal GitHubInstallationRepositoriesEvent: %w", err)
+		}
+
+		log.Printf("[queue] Processing HandleInstallationRepositoriesEvent: installation=%d action=%s added=%d removed=%d",
+			payload.Installation.ID, payload.Action,
+			len(payload.RepositoriesAdded), len(payload.RepositoriesRemoved))
+
+		return svc.HandleInstallationRepositoriesEvent(payload)
 	}
 }
