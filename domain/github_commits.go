@@ -14,6 +14,7 @@ type GitHubCommitsDomain interface {
 	StoreCommitsBulk(params []models.GitHubCommits) ([]models.GitHubCommits, error)
 	GetCommitsByAuthorAndDate(workspaceID int64, author string, from, to time.Time) ([]models.GitHubCommits, error)
 	GetRecentCommitsByWorkspace(workspaceID int64, from time.Time) ([]models.GitHubCommits, error)
+	SearchCommitsByKeyword(workspaceID int64, keyword string, limit int) ([]models.CommitKeywordSearchResult, error)
 }
 
 type GitHubCommitsDomainCtx struct{}
@@ -154,4 +155,33 @@ func (g *GitHubCommitsDomainCtx) GetRecentCommitsByWorkspace(workspaceID int64, 
 		Find(&commits).Error
 
 	return commits, err
+}
+
+func (g *GitHubCommitsDomainCtx) SearchCommitsByKeyword(workspaceID int64, keyword string, limit int) ([]models.CommitKeywordSearchResult, error) {
+	db := config.DbManager()
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+
+	var results []models.CommitKeywordSearchResult
+	err := db.Raw(`
+		SELECT
+			c.commit_sha,
+			c.github_author_name AS author,
+			c.commit_message     AS message,
+			c.committed_at,
+			c.github_repository_id AS repo_id
+		FROM git_hub_commits c
+		JOIN git_hub_repository gr ON gr.id = c.github_repository_id
+		JOIN github_installations gi ON gi.installation_id = gr.installation_id
+		WHERE gi.workspace_id = ?
+		  AND (
+			  c.commit_message ILIKE '%' || ? || '%'
+			  OR to_tsvector('english', c.commit_message) @@ plainto_tsquery('english', ?)
+		  )
+		ORDER BY c.committed_at DESC
+		LIMIT ?
+	`, workspaceID, keyword, keyword, limit).Scan(&results).Error
+
+	return results, err
 }

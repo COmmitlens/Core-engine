@@ -82,6 +82,31 @@ func (githubRepositoryHandler *GitHubRepositoryHandler) ExplainCommitFileChange(
 	return c.JSON(http.StatusOK, explainedAnswer)
 }
 
+// new ReAct method
+func (githubRepositoryHandler *GitHubRepositoryHandler) QueryToWorkspace(c echo.Context) error {
+	workspaceID := c.Param("workspace_id")
+	workspaceIDInt, err := strconv.ParseInt(workspaceID, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid workspace_id"})
+	}
+
+	var param models.WorkspaceQueryRequest
+	if err := c.Bind(&param); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
+	if param.Query == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "query is required"})
+	}
+
+	response, err := githubRepositoryHandler.GitHubRepositoryService.QueryToWorkspace(param, workspaceIDInt)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// previous ai ways
 func (githubRepositoryHandler *GitHubRepositoryHandler) QueryWorkspace(c echo.Context) error {
 	workspaceID := c.Param("workspace_id")
 	workspaceIDInt, err := strconv.ParseInt(workspaceID, 10, 64)
@@ -103,6 +128,47 @@ func (githubRepositoryHandler *GitHubRepositoryHandler) QueryWorkspace(c echo.Co
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+func (githubRepositoryHandler *GitHubRepositoryHandler) SearchCommitsByKeyword(c echo.Context) error {
+	workspaceID := c.Param("workspace_id")
+	workspaceIDInt, err := strconv.ParseInt(workspaceID, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid workspace_id"})
+	}
+	keyword := c.QueryParam("q")
+	if keyword == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "query param 'q' is required"})
+	}
+	limitStr := c.QueryParam("limit")
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+	results, err := githubRepositoryHandler.GitHubRepositoryService.SearchCommitsByKeyword(workspaceIDInt, keyword, limit)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, results)
+}
+
+func (githubRepositoryHandler *GitHubRepositoryHandler) GetCommitFileHistory(c echo.Context) error {
+	repoID := c.Param("repo_id")
+	repoIDInt, err := strconv.ParseInt(repoID, 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "invalid repository id"})
+	}
+	filename := c.QueryParam("filename")
+	if filename == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": "filename query param is required"})
+	}
+	history, err := githubRepositoryHandler.GitHubRepositoryService.GetCommitFileHistory(repoIDInt, filename)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, echo.Map{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, history)
 }
 
 // BackfillEmbeddings queues embedding tasks for all commit files that have no

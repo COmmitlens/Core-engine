@@ -85,6 +85,9 @@ type GetRepoCommitsReqs struct {
 type WorkspaceQueryRequest struct {
 	Query     string `json:"query"`
 	Author    string `json:"author"`
+	Filename  string `json:"filename"`
+	RepoID    int64  `json:"repo_id"`
+	Limit     int    `json:"limit"`
 	DateRange struct {
 		StartDate time.Time `json:"start_date"`
 		EndDate   time.Time `json:"end_date"`

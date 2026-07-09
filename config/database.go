@@ -32,23 +32,25 @@ func DbInit() {
 
 	fmt.Println("Connected to Database")
 
+	// Auto-migrate all tables
 	err = db.AutoMigrate(
-		&models.Waitlist{},
 		&models.User{},
-		&models.Role{},
 		&models.Workspace{},
+		&models.ManageWorkspace{},
+		&models.Role{},
 		&models.Channels{},
 		&models.ManageChannels{},
 		&models.Credentials{},
-		&models.Customer{},
-		&models.Payment{},
 		&models.GitHubInstallation{},
-		&models.ManageWorkspace{},
 		&models.GitHubRepository{},
-		&models.Payment{},
 		&models.GitHubCommits{},
 		&models.GitHubCommitFiles{},
 		&models.CommitFileEmbedding{},
+		&models.SlackInstallation{},
+		&models.DMConversation{},
+		&models.DMMessage{},
+		&models.Payment{},
+		&models.Customer{},
 	)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)

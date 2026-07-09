@@ -199,24 +199,68 @@ func (g *GitHubRepositoryService) buildSystemPrompt() string {
 Be concise and technical.`
 }
 
+func (g *GitHubRepositoryService) QueryToWorkspace(param models.WorkspaceQueryRequest, workspaceID int64) (models.WorkspaceQueryResponse, error) {
+	data, err := g.AiDomain.QueryToWorkspace(param, workspaceID)
+	if err != nil {
+		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to query workspace: %w", err)
+	}
+	return data, nil
+}
+
 func (g *GitHubRepositoryService) QueryWorkspace(param models.WorkspaceQueryRequest, workspaceID int64) (models.WorkspaceQueryResponse, error) {
-	intent, err := g.AiDomain.ClassifyQueryIntent(param.Query)
+	classified, err := g.AiDomain.ClassifyQueryIntent(param.Query)
 	if err != nil {
 		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to classify query intent: %w", err)
 	}
-	fmt.Println(intent)
-	switch intent {
+	fmt.Printf("[intent] %s | keyword=%q author=%q filename=%q\n",
+		classified.Intent, classified.Keyword, classified.Author, classified.Filename)
+
+	switch classified.Intent {
 	case "intent:code_explanation":
 		return g.semantic_search(param.Query, workspaceID)
 	case "intent:get_commits_by_author_and_date":
-		fmt.Println("get_commits_by_author_and_date")
+		author := classified.Author
+		if author == "" {
+			author = param.Author // fallback to explicit request field
+		}
 		from, to := resolveDateRange(param.DateRange)
-		commits, _ := g.GitHubCommitsDomain.GetCommitsByAuthorAndDate(workspaceID, param.Author, from, to)
+		commits, _ := g.GitHubCommitsDomain.GetCommitsByAuthorAndDate(workspaceID, author, from, to)
 		return g.generateCommitAnswer(param.Query, commits)
 	case "intent:get_recent_commits":
 		from, _ := resolveDateRange(param.DateRange)
 		commits, _ := g.GitHubCommitsDomain.GetRecentCommitsByWorkspace(workspaceID, from)
 		return g.generateCommitAnswer(param.Query, commits)
+	case "intent:search_by_keyword":
+		keyword := classified.Keyword
+		if keyword == "" {
+			keyword = param.Query // fallback: use full query if extraction failed
+		}
+		limit := param.Limit
+		if limit <= 0 {
+			limit = 20
+		}
+		results, err := g.GitHubCommitsDomain.SearchCommitsByKeyword(workspaceID, keyword, limit)
+		if err != nil {
+			return models.WorkspaceQueryResponse{}, fmt.Errorf("keyword search failed: %w", err)
+		}
+		return g.generateKeywordSearchAnswer(param.Query, keyword, results)
+	case "intent:get_file_history":
+		filename := classified.Filename
+		if filename == "" {
+			filename = param.Filename // fallback to explicit request field
+		}
+		if filename == "" || param.RepoID == 0 {
+			return models.WorkspaceQueryResponse{
+				Answer:      "Please provide a filename and repo_id to fetch file history.",
+				ActionItems: []string{},
+				Sources:     []models.WorkspaceQuerySource{},
+			}, nil
+		}
+		history, err := g.GitHubCommitFilesDomain.GetCommitFileHistory(param.RepoID, filename)
+		if err != nil {
+			return models.WorkspaceQueryResponse{}, fmt.Errorf("file history fetch failed: %w", err)
+		}
+		return g.generateFileHistoryAnswer(param.Query, filename, history)
 	default:
 		return models.WorkspaceQueryResponse{
 			Answer:      "Sorry, I can only answer questions related to code changes and commit history.",
@@ -224,6 +268,144 @@ func (g *GitHubRepositoryService) QueryWorkspace(param models.WorkspaceQueryRequ
 			Sources:     []models.WorkspaceQuerySource{},
 		}, nil
 	}
+}
+
+func (g *GitHubRepositoryService) generateKeywordSearchAnswer(query, keyword string, results []models.CommitKeywordSearchResult) (models.WorkspaceQueryResponse, error) {
+	if len(results) == 0 {
+		return models.WorkspaceQueryResponse{
+			Answer:      "No commits found matching that keyword.",
+			ActionItems: []string{},
+			Sources:     []models.WorkspaceQuerySource{},
+		}, nil
+	}
+
+	var sb strings.Builder
+	for i, r := range results {
+		if i >= 20 {
+			break
+		}
+		sb.WriteString(fmt.Sprintf("Commit: %s\nAuthor: %s\nDate: %s\nMessage: %s\n\n",
+			r.CommitSHA, r.Author, r.CommittedAt.Format(time.RFC3339), r.Message))
+	}
+
+	systemPrompt := `You are an expert code analyst. Answer the user's question based on the provided keyword-matched commit history.
+Be concise and technical.
+You MUST respond with a valid JSON object (no markdown, no extra text) matching this schema:
+{
+  "answer": "<direct answer to the question>",
+  "action_items": ["<actionable step>", ...],
+  "code_patch": "",
+  "impact": "<brief impact summary>"
+}`
+	userPrompt := fmt.Sprintf("QUESTION: %s\n\nSEARCH KEYWORD USED: %s\n\nMATCHED COMMITS:\n%s\n\nRespond ONLY with the JSON object.", query, keyword, sb.String())
+
+	raw, err := g.AiDomain.CallAzureChatCompletion(systemPrompt, userPrompt)
+	if err != nil {
+		return models.WorkspaceQueryResponse{}, fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	var llmResp struct {
+		Answer      string   `json:"answer"`
+		ActionItems []string `json:"action_items"`
+		CodePatch   string   `json:"code_patch"`
+		Impact      string   `json:"impact"`
+	}
+	if err := json.Unmarshal([]byte(raw), &llmResp); err != nil {
+		llmResp.Answer = raw
+	}
+
+	var sources []models.WorkspaceQuerySource
+	seen := make(map[string]bool)
+	for _, r := range results {
+		if len(sources) >= 3 {
+			break
+		}
+		if seen[r.CommitSHA] {
+			continue
+		}
+		seen[r.CommitSHA] = true
+		sources = append(sources, models.WorkspaceQuerySource{
+			CommitSHA: r.CommitSHA,
+		})
+	}
+
+	return models.WorkspaceQueryResponse{
+		Answer:      llmResp.Answer,
+		ActionItems: llmResp.ActionItems,
+		CodePatch:   llmResp.CodePatch,
+		Impact:      llmResp.Impact,
+		Sources:     sources,
+	}, nil
+}
+
+func (g *GitHubRepositoryService) generateFileHistoryAnswer(query, filename string, history []models.CommitFileHistory) (models.WorkspaceQueryResponse, error) {
+	if len(history) == 0 {
+		return models.WorkspaceQueryResponse{
+			Answer:      fmt.Sprintf("No commit history found for file: %s", filename),
+			ActionItems: []string{},
+			Sources:     []models.WorkspaceQuerySource{},
+		}, nil
+	}
+
+	var sb strings.Builder
+	for i, h := range history {
+		if i >= 15 {
+			break
+		}
+		sb.WriteString(fmt.Sprintf("Commit: %s\nAuthor: %s\nDate: %s\nStatus: %s (+%d/-%d)\nMessage: %s\n\n",
+			h.CommitSHA, h.Author, h.CommittedAt.Format(time.RFC3339),
+			h.Status, h.Additions, h.Deletions, h.Message))
+	}
+
+	systemPrompt := `You are an expert code analyst. Answer the user's question based on the history of changes to a specific file.
+Be concise and technical.
+You MUST respond with a valid JSON object (no markdown, no extra text) matching this schema:
+{
+  "answer": "<direct answer to the question>",
+  "action_items": ["<actionable step>", ...],
+  "code_patch": "",
+  "impact": "<brief impact summary>"
+}`
+	userPrompt := fmt.Sprintf("QUESTION: %s\n\nFILE: %s\n\nCHANGE HISTORY:\n%s\n\nRespond ONLY with the JSON object.", query, filename, sb.String())
+
+	raw, err := g.AiDomain.CallAzureChatCompletion(systemPrompt, userPrompt)
+	if err != nil {
+		return models.WorkspaceQueryResponse{}, fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	var llmResp struct {
+		Answer      string   `json:"answer"`
+		ActionItems []string `json:"action_items"`
+		CodePatch   string   `json:"code_patch"`
+		Impact      string   `json:"impact"`
+	}
+	if err := json.Unmarshal([]byte(raw), &llmResp); err != nil {
+		llmResp.Answer = raw
+	}
+
+	var sources []models.WorkspaceQuerySource
+	seen := make(map[string]bool)
+	for _, h := range history {
+		if len(sources) >= 3 {
+			break
+		}
+		if seen[h.CommitSHA] {
+			continue
+		}
+		seen[h.CommitSHA] = true
+		sources = append(sources, models.WorkspaceQuerySource{
+			FileName:  filename,
+			CommitSHA: h.CommitSHA,
+		})
+	}
+
+	return models.WorkspaceQueryResponse{
+		Answer:      llmResp.Answer,
+		ActionItems: llmResp.ActionItems,
+		CodePatch:   llmResp.CodePatch,
+		Impact:      llmResp.Impact,
+		Sources:     sources,
+	}, nil
 }
 
 func (g *GitHubRepositoryService) generateCommitAnswer(query string, commits []models.GitHubCommits) (models.WorkspaceQueryResponse, error) {
@@ -318,7 +500,6 @@ func (g *GitHubRepositoryService) semantic_search(query string, workspaceID int6
 	if err != nil {
 		return models.WorkspaceQueryResponse{}, fmt.Errorf("failed to generate query embedding: %w", err)
 	}
-	fmt.Println(embedding)
 
 	// 2. Vector similarity search scoped to workspace
 	results, err := g.CommitFileEmbeddingDomain.VectorSearchByWorkspace(
@@ -454,4 +635,15 @@ Using the context above, provide a simple and direct answer to the user's questi
 		mainCommitFile.Filename, mainCommitFile.Status,
 		mainCommitFile.Additions, mainCommitFile.Deletions, mainPatch,
 		relatedCount, relatedFilesContext, question)
+}
+
+func (g *GitHubRepositoryService) GetCommitFileHistory(repoID int64, filename string) ([]models.CommitFileHistory, error) {
+	return g.GitHubCommitFilesDomain.GetCommitFileHistory(repoID, filename)
+}
+
+func (g *GitHubRepositoryService) SearchCommitsByKeyword(workspaceID int64, keyword string, limit int) ([]models.CommitKeywordSearchResult, error) {
+	if keyword == "" {
+		return nil, fmt.Errorf("keyword is required")
+	}
+	return g.GitHubCommitsDomain.SearchCommitsByKeyword(workspaceID, keyword, limit)
 }

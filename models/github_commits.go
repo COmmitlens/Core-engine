@@ -22,6 +22,14 @@ type GitHubCommitResponse struct {
 	CommittedAt      time.Time `json:"committed_at"`
 }
 
+type CommitKeywordSearchResult struct {
+	CommitSHA  string    `json:"commit_sha"`
+	Author     string    `json:"author"`
+	Message    string    `json:"message"`
+	CommittedAt time.Time `json:"committed_at"`
+	RepoID     int64     `json:"repo_id"`
+}
+
 type GetRepoCommitsPaginatedResponse struct {
 	Commits []GitHubCommitResponse `json:"commits"`
 	Meta    MetaPagination         `json:"meta"`

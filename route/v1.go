@@ -41,7 +41,8 @@ func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
 	workspace.GET("/get_repo_commits/:repo_id", h.Workspace.GetRepoCommits)
 	workspace.GET("/get_commit_details/:github_commit_id", h.Workspace.GetCommitFilesDetails)
 	workspace.POST("/get_members", h.Workspace.GetWorkSpaceMembers)
-	workspace.POST("/:workspace_id/query", h.GitHubRepository.QueryWorkspace)
+	workspace.POST("/:workspace_id/query", h.GitHubRepository.QueryToWorkspace)
+	workspace.GET("/:workspace_id/search", h.GitHubRepository.SearchCommitsByKeyword)
 
 	g.POST("/workspace/accept-invite", h.Workspace.AcceptInvite)
 	g.POST("/workspace/details", h.Workspace.GetWorkspaceDetails, middleware.JWTVerify())
@@ -63,8 +64,28 @@ func v1Routes(g *echo.Group, h AppModel, rdb *redis.Client) {
 	githubRepo.GET("/repos/:repo_id/commits/:commit_sha", h.GitHubRepository.GetCommitDetails)
 	githubRepo.GET("/commit-files/:commit_file_id/related", h.GitHubRepository.GetRelatedCommitFiles)
 	githubRepo.POST("/commit-files/:commit_file_id/explain", h.GitHubRepository.ExplainCommitFileChange)
+	githubRepo.GET("/repos/:repo_id/files/history", h.GitHubRepository.GetCommitFileHistory)
 	githubRepo.POST("/backfill-embeddings", h.GitHubRepository.BackfillEmbeddings)
 
+	// ── Direct Messages ────────────────────────────────────────────────────────
+	dm := g.Group("/dm", middleware.JWTVerify())
+	dm.POST("/start", h.DM.StartConversation)
+	dm.GET("/conversations", h.DM.ListConversations)
+	dm.POST("/send", h.DM.SendMessage)
+	dm.GET("/messages", h.DM.ListMessages)
+	dm.POST("/read", h.DM.MarkRead)
+
+	// WebSocket — real-time messaging
+	// GET /v1/dm/ws?conversation_id=1
+	// Token must be passed as ?token=<jwt> because browsers can't set
+	// Authorization headers on WebSocket connections.
+	dm.GET("/ws", h.DM.ServeWS)
+
+	slack := g.Group("/slack")
+	slack.POST("/events", h.Slack.HandleEvent)
+	slack.GET("/install", h.Slack.Install, middleware.JWTVerify())
+	slack.GET("/oauth/callback", h.Slack.OAuthCallback)
+	slack.GET("/status", h.Slack.Status, middleware.JWTVerify())
 	waitinglist := g.Group("/waitlist")
 	waitinglist.POST("/add", h.Waitlist.AddToWaitlist)
 

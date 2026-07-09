@@ -6,6 +6,7 @@ import (
 	"core/handler"
 	"core/queue"
 	"core/service"
+	"core/ws"
 	"log"
 
 	"github.com/hibiken/asynq"
@@ -23,6 +24,8 @@ type AppModel struct {
 	Credentials      handler.CredentialsHandler
 	ConnectOrg       handler.ConnectOrgHandler
 	GitHubRepository handler.GitHubRepositoryHandler
+	DM               handler.DMHandler
+	Slack            handler.SlackHandler
 	Waitlist         handler.WaitlistHandler
 }
 
@@ -54,6 +57,12 @@ func App() AppModel {
 	commitFileEmbeddingDomain := &domain.CommitFileEmbeddingDomainCtx{}
 	gitHubInstallationsDomain := &domain.GitHubInstallationsDomainCtx{}
 	aiDomain := &domain.AiDomainCtx{}
+	dmDomain := &domain.DMDomainCtx{}
+	slackDomain := &domain.SlackDomainCtx{}
+
+	// WebSocket hub — single shared instance for the lifetime of the process.
+	hub := ws.NewHub()
+
 	waitlistDomain := &domain.WaitlistDomainCtx{}
 	//service
 	healthService := service.HealthService{
@@ -94,6 +103,12 @@ func App() AppModel {
 	manageChannelsService := service.ManageChannelsService{
 		ManageChannelsDomain: manageChannelsDomain,
 	}
+	dmService := service.DMService{
+		DMDomain:              dmDomain,
+		UserDomain:            userDomain,
+		ManageWorkspaceDomain: manageWorkspaceDomain,
+		Hub:                   hub,
+	}
 	credentialsService := service.CredentialsService{
 		CredentialsDomain: credentialsDomain,
 	}
@@ -122,6 +137,11 @@ func App() AppModel {
 		CommitFileEmbeddingDomain: commitFileEmbeddingDomain,
 		QueueClient:               queueClient,
 		AiDomain:                  aiDomain,
+	}
+	slackService := service.SlackService{
+		SlackDomain:             slackDomain,
+		AiDomain:                aiDomain,
+		GitHubRepositoryService: &gitHubRepositoryService,
 	}
 
 	//handler
@@ -160,6 +180,13 @@ func App() AppModel {
 	gitHubRepositoryHandler := handler.GitHubRepositoryHandler{
 		GitHubRepositoryService: gitHubRepositoryService,
 	}
+	dmHandler := handler.DMHandler{
+		DMService: dmService,
+		Hub:       hub,
+	}
+	slackHandler := handler.SlackHandler{
+		SlackService: slackService,
+	}
 	waitlistHandler := handler.WaitlistHandler{
 		WaitlistService: waitlistService,
 	}
@@ -176,6 +203,8 @@ func App() AppModel {
 		Credentials:      credentialsHandler,
 		ConnectOrg:       connectOrgHandler,
 		GitHubRepository: gitHubRepositoryHandler,
+		DM:               dmHandler,
+		Slack:            slackHandler,
 		Waitlist:         waitlistHandler,
 	}
 }
