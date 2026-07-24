@@ -31,6 +31,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}   # auto-provided, no manual secret needed
 
+      - name: Lowercase image name
+        run: echo "IMAGE_NAME=${IMAGE_NAME,,}" >> "$GITHUB_ENV"   # ghcr.io requires lowercase repo names
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
