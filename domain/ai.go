@@ -104,6 +104,7 @@ func (g *AiDomainCtx) QueryToWorkspace(param models.WorkspaceQueryRequest, works
 		"repo_id":      param.RepoID,
 		"limit":        param.Limit,
 		"date_range":   param.DateRange,
+		"slack":        param.Slack,
 	}
 
 	jsonData, err := json.Marshal(requestBody)

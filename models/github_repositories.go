@@ -88,6 +88,7 @@ type WorkspaceQueryRequest struct {
 	Filename  string `json:"filename"`
 	RepoID    int64  `json:"repo_id"`
 	Limit     int    `json:"limit"`
+	Slack     bool   `json:"slack"`
 	DateRange struct {
 		StartDate time.Time `json:"start_date"`
 		EndDate   time.Time `json:"end_date"`

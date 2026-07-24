@@ -64,6 +64,7 @@ func (h *SlackHandler) HandleEvent(c echo.Context) error {
 			Text:      event.Text,
 			Timestamp: event.Ts,
 			ThreadTS:  event.ThreadTs,
+			Slack:     true,
 		})
 	}
 

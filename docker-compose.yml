@@ -42,7 +42,7 @@ services:
   # Go backend (Core-engine)
   # ─────────────────────────────────────────────
   app:
-    image: ghcr.io/commitlens/commitlens-core:${CORE_VERSION:-latest}
+    image: ghcr.io/commitlens/commitlens-core:${CORE_VERSION:-dev}
     container_name: commitlens_app
     restart: unless-stopped
     env_file:
@@ -69,7 +69,7 @@ services:
   # Python FastAPI AI backend (core-ai)
   # ─────────────────────────────────────────────
   ai:
-    image: ghcr.io/commitlens/commitlens-ai:${AI_VERSION:-latest}
+    image: ghcr.io/commitlens/commitlens-ai:${AI_VERSION:-dev}
     container_name: commitlens_ai
     restart: unless-stopped
     env_file:
@@ -86,7 +86,7 @@ services:
   # Next.js frontend (twin-ai-fe)
   # ─────────────────────────────────────────────
   frontend:
-    image: ghcr.io/commitlens/twin-ai-fe:${FRONTEND_VERSION:-latest}
+    image: ghcr.io/commitlens/commitlens-frontend:${FRONTEND_VERSION:-dev}
     container_name: commitlens_frontend
     restart: unless-stopped
     environment:

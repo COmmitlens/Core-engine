@@ -46,6 +46,7 @@ type SlackMessageEvent struct {
 	Text      string
 	Timestamp string
 	ThreadTS  string
+	Slack     bool
 }
 
 // ─── OAuth response from Slack ────────────────────────────────────────────────
