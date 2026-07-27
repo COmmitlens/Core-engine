@@ -39,4 +39,3 @@ type GitHubCommitFiles struct {
 	GithubRepoID   int64     `gorm:"column:github_repo_id;index;not null"`
 	CreatedAt      time.Time `gorm:"column:created_at;autoCreateTime"`
 }
-
