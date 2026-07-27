@@ -51,8 +51,12 @@ case "${1:-}" in
       -d "$DOMAIN" --agree-tos -m "$LETSENCRYPT_EMAIL" --no-eff-email --non-interactive --keep-until-expiring
 
     info "Copying issued cert into $CERTS_DIR and reloading nginx…"
-    cp "$CERTBOT_STATE_DIR/live/$DOMAIN/fullchain.pem" "$CERTS_DIR/fullchain.pem"
-    cp "$CERTBOT_STATE_DIR/live/$DOMAIN/privkey.pem"   "$CERTS_DIR/privkey.pem"
+    # certbot writes as root inside certbot-state/ — need sudo to read it back out.
+    sudo cp "$CERTBOT_STATE_DIR/live/$DOMAIN/fullchain.pem" "$CERTS_DIR/fullchain.pem"
+    sudo cp "$CERTBOT_STATE_DIR/live/$DOMAIN/privkey.pem"   "$CERTS_DIR/privkey.pem"
+    sudo chown "$(id -u):$(id -g)" "$CERTS_DIR/fullchain.pem" "$CERTS_DIR/privkey.pem"
+    chmod 644 "$CERTS_DIR/fullchain.pem"
+    chmod 600 "$CERTS_DIR/privkey.pem"
     docker compose -f "$ROOT_DIR/docker-compose.yml" exec nginx nginx -s reload
     info "Certificate for $DOMAIN is live."
     ;;

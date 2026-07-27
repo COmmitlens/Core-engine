@@ -440,7 +440,7 @@ func (c *ConnectOrgService) RedirectToOrgAuth(payload models.JWTPayload) (string
 		return "", err
 	}
 
-	redirectURL := fmt.Sprintf("https://github.com/apps/office-aiii/installations/new?state=%s", token)
+	redirectURL := fmt.Sprintf("https://github.com/apps/%s/installations/new?state=%s", config.GetConfig().GitHubAppSlug, token)
 
 	return redirectURL, nil
 }

@@ -21,6 +21,7 @@ type Configuration struct {
 	FrontendUrl            string `env:"FRONTEND_URL"`
 	GitHubAppID            int64  `env:"GITHUB_APP_ID"`
 	GitHubPrivateKey       string `env:"GITHUB_PRIVATE_KEY"`
+	GitHubAppSlug          string `env:"GITHUB_APP_SLUG"`
 	AzureOpenAIEndpoint    string `env:"AZURE_OPENAI_ENDPOINT"`
 	AzureOpenAIKey         string `env:"AZURE_OPENAI_KEY"`
 	AzureOpenAIModel       string `env:"AZURE_OPENAI_MODEL"`
