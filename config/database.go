@@ -16,7 +16,7 @@ var err error
 
 func DbInit() {
 	config := GetConfig()
-	connectString := fmt.Sprintf(config.Dburl)
+	connectString := config.Dburl
 
 	// Open the connection to the database
 	db, err = gorm.Open(postgres.Open(connectString), &gorm.Config{
